@@ -152,11 +152,6 @@ export default function VariablePanel() {
                       title={v.display_value || v.value}
                     >
                       {v.display_value || v.value}
-                      {v.deref_type && (
-                        <span style={{ color: '#999', fontSize: 10, marginLeft: 2 }}>
-                          ({v.deref_type})
-                        </span>
-                      )}
                     </td>
                   </tr>
                 ))}

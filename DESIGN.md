@@ -854,6 +854,7 @@ diff 算法核心（逐个标注的数据结构做）：
 | Canvas 数组渲染 | 柱状图 + 格子模式 |
 | 排序动画 | 比较/交换闪动 |
 | 断点系统 | 设置/删除/运行到断点 |
+| **示例模板切换** | 顶部下拉框：链表反转 / BST 搜索 / 数组排序… 一键切换独立示例，不用手写代码 |
 
 ### v0.5 — 打磨
 
@@ -870,35 +871,67 @@ diff 算法核心（逐个标注的数据结构做）：
 
 ## 8. 关键技术细节
 
-### 8.1 GDB Python API 要点
+### 8.1 示例模板系统（v0.4 规划）
 
-使用 `pygdbmi` 库（GDB Machine Interface 客户端），关键操作：
+每个数据结构有独立的代码模板，用户一键切换：
+
+```
+顶部模板选择器： [🔗 链表反转 ▾] [🌳 BST 查找] [📊 冒泡排序] …
+
+切换后：
+  1. 代码编辑器加载预设 C++ 代码（含 @viz 标注）
+  2. 标注列表自动更新
+  3. 断点自动设置在关键行
+  4. 点击「编译运行」即可开始调试
+```
+
+预设模板列表（随版本迭代扩充）：
+
+| 模板 | 数据结构 | @viz 标注 |
+|---|---|---|
+| 链表反转 | linked_list | `@viz linked_list(L) head=head.next_field=next` + `@viz watch(curr, prev)` |
+| 链表找中点 | linked_list | `@viz linked_list(L) head=head.next_field=next` + `@viz watch(slow, fast)` |
+| BST 插入 | binary_tree | `@viz binary_tree(T) root=root.left_field=left.right_field=right` |
+| BST 搜索 | binary_tree | 同上 + `@viz watch(curr)` |
+| 冒泡排序 | array | `@viz array(A) ptr=arr.length_field=n` |
+| 二分查找 | array | 同上 + `@viz watch(lo, hi, mid)` |
+
+### 8.2 LLDB Python API 要点（当前实现）
+
+项目使用 **LLDB**（非 GDB）作为调试后端。LLDB 的 Python 绑定绑定在 Xcode 的 Python 3.9 中，
+通过子进程桥接（`lldb_bridge.py`）与 FastAPI 通信。
 
 ```python
-from pygdbmi.gdbcontroller import GdbController
-
-gdb = GdbController()
+import lldb
 
 # 起程序
-gdb.write("file ./binary")
-gdb.write("break main")
-gdb.write("run")
+debugger = lldb.SBDebugger.Create()
+target = debugger.CreateTarget("./binary", None, None, False, error)
+target.BreakpointCreateByName("main")
+process = target.Launch(launch_info, error)
 
 # 步进
-gdb.write("-exec-next")        # step over
-gdb.write("-exec-step")        # step into
-gdb.write("-exec-finish")      # step out
+thread.StepOver()   # step over
+thread.StepInto()   # step into
+thread.StepOut()    # step out
 
-# 获取信息
-gdb.write("-stack-list-variables --simple-values")  # 局部变量
-gdb.write("-stack-list-frames")                     # 调用栈
-gdb.write("-data-evaluate-expression slow->val")    # 执行表达式
+# 获取局部变量
+values = frame.GetVariables(True, True, False, False)
+for i in range(values.GetSize()):
+    val = values.GetValueAtIndex(i)
+    name = val.GetName()
+    type_name = val.GetTypeName()
+    raw_value = val.GetValue()
+    summary = val.GetSummary()
 
-# 查看类型
-gdb.write("ptype ListNode")                         # 获取 struct 定义
+# 指针解引用
+deref_val = val.Dereference()
+if deref_val and deref_val.IsValid():
+    for j in range(deref_val.GetNumChildren()):
+        child = deref_val.GetChildAtIndex(j)
 
-# 读取内存（用于遍历数据结构）
-gdb.write("-data-read-memory 0x5555555a3c40 x 1 1 10")  # 读内存
+# 执行表达式
+result = frame.EvaluateExpression("slow->val")
 ```
 
 ### 8.2 编译命令
