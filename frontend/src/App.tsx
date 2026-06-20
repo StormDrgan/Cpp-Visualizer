@@ -20,7 +20,7 @@ export default function App() {
         height: '100vh',
         display: 'grid',
         gridTemplateRows: '44px 1fr 44px',
-        gridTemplateColumns: '42% 1fr 288px',
+        gridTemplateColumns: '42% 1fr',
         overflow: 'hidden',
         fontFamily: '-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif',
       }}
@@ -35,14 +35,21 @@ export default function App() {
         <CodeEditor />
       </div>
 
-      {/* 中间 — 可视化画布 */}
-      <div style={{ gridColumn: 2, gridRow: 2, overflow: 'hidden' }}>
-        <CanvasArea />
-      </div>
-
-      {/* 右侧 — 信息面板 */}
-      <div style={{ gridColumn: 3, gridRow: 2, overflow: 'hidden' }}>
-        <VariablePanel />
+      {/* 右侧 — 上下结构：画布(上) + 变量(下) */}
+      <div style={{
+        gridColumn: 2, gridRow: 2,
+        display: 'flex', flexDirection: 'column',
+        overflow: 'hidden',
+        borderLeft: '1px solid #e8e8e8',
+      }}>
+        {/* 可视化画布 — 上部 */}
+        <div style={{ flex: '1 1 55%', overflow: 'hidden', borderBottom: '2px solid #e8e8e8' }}>
+          <CanvasArea />
+        </div>
+        {/* 变量面板 — 下部 */}
+        <div style={{ flex: '1 1 45%', overflow: 'hidden', minHeight: 200 }}>
+          <VariablePanel />
+        </div>
       </div>
 
       {/* 底栏 — 跨所有列 */}

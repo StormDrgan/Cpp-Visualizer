@@ -584,10 +584,11 @@ def _build_state(process: lldb.SBProcess, source_file: str, is_terminated: bool 
                 deref_type = str(deref_val.GetTypeName() or type_name.replace("*", "").strip())
                 deref_summary = deref_val.GetSummary()
                 if deref_summary:
-                    display_value = f"{raw_value} → {deref_summary}"
+                    # Don't show raw address — just the pointed-to value
+                    display_value = str(deref_summary).strip('"')
                 else:
                     # Custom structs (e.g., ListNode) don't have LLDB formatters
-                    # Build summary from child members: {val=1, next=0x...}
+                    # Build summary from child members: {val=1, next=...}
                     children_parts = []
                     num_children = deref_val.GetNumChildren()
                     for j in range(min(num_children, 20)):  # cap at 20 fields
@@ -595,11 +596,19 @@ def _build_state(process: lldb.SBProcess, source_file: str, is_terminated: bool 
                         if child:
                             cname = str(child.GetName() or "")
                             if cname:
+                                child_type = str(child.GetTypeName() or "")
+                                is_child_ptr = child_type.endswith("*") or child_type.endswith(" *")
                                 cval = child.GetSummary() or child.GetValue() or ""
                                 cval = str(cval).strip('"')
+                                # For pointer children, hide raw address
+                                if is_child_ptr:
+                                    if _is_null(cval):
+                                        cval = "nullptr"
+                                    else:
+                                        cval = "…"  # ellipsis for non-null pointer
                                 children_parts.append(f"{cname}={cval}")
                     if children_parts:
-                        display_value = f"{raw_value} → {{{', '.join(children_parts)}}}"
+                        display_value = f"{{{', '.join(children_parts)}}}"
 
         locals_list.append({
             "name": str(name),

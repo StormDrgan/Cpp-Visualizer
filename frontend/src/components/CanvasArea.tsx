@@ -20,6 +20,10 @@ export default function CanvasArea() {
   const stageRef = useRef<Konva.Stage>(null);
   const [size, setSize] = useState({ w: 600, h: 320 });
 
+  // Pan & zoom state
+  const [stageScale, setStageScale] = useState(1);
+  const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
+
   // Track previously seen actions to avoid re-animating
   const prevActionsLen = useRef(0);
 
@@ -112,10 +116,47 @@ export default function CanvasArea() {
     });
   }, [diffActions]);
 
-  // Reset prevActionsLen when structures change (new debug session)
+  // Reset prevActionsLen when step changes
   useEffect(() => {
     prevActionsLen.current = 0;
+    // Reset pan/zoom on new session
+    setStageScale(1);
+    setStagePos({ x: 0, y: 0 });
   }, [snapshot?.step_number]);
+
+  // Wheel → zoom centered on cursor
+  const handleWheel = (e: Konva.KonvaEventObject<WheelEvent>) => {
+    e.evt.preventDefault();
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    const oldScale = stage.scaleX();
+    const pointer = stage.getPointerPosition();
+    if (!pointer) return;
+
+    const scaleBy = 1.08;
+    const direction = e.evt.deltaY > 0 ? -1 : 1;
+    const newScale = direction > 0 ? oldScale * scaleBy : oldScale / scaleBy;
+    const clamped = Math.max(0.25, Math.min(3, newScale));
+
+    const mousePointTo = {
+      x: (pointer.x - stage.x()) / oldScale,
+      y: (pointer.y - stage.y()) / oldScale,
+    };
+
+    const newPos = {
+      x: pointer.x - mousePointTo.x * clamped,
+      y: pointer.y - mousePointTo.y * clamped,
+    };
+
+    setStageScale(clamped);
+    setStagePos(newPos);
+  };
+
+  // Drag end → save position
+  const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
+    setStagePos({ x: e.target.x(), y: e.target.y() });
+  };
 
   // ---- Empty / terminal states ----
 
@@ -160,7 +201,15 @@ export default function CanvasArea() {
 
   return (
     <div ref={containerRef} style={{ height: '100%', background: '#f9f9fb' }}>
-      <Stage ref={stageRef} width={size.w} height={size.h}>
+      <Stage
+        ref={stageRef}
+        width={size.w} height={size.h}
+        scaleX={stageScale} scaleY={stageScale}
+        x={stagePos.x} y={stagePos.y}
+        draggable
+        onDragEnd={handleDragEnd}
+        onWheel={handleWheel}
+      >
         <Layer>
           {structures.map((struct) =>
             struct.structure_type === 'binary_tree'
