@@ -7,7 +7,9 @@
       "Bash(python3 -c \"import PyPDF2; print\\('PyPDF2 available'\\)\")",
       "Bash(python3 -c \"import fitz; print\\('pymupdf available'\\)\")",
       "Bash(pip3 install *)",
-      "Bash(python3 *)"
+      "Bash(python3 *)",
+      "Bash(npx tsc *)",
+      "Bash(./node_modules/.bin/tsc --noEmit)"
     ]
   }
 }

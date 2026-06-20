@@ -1,21 +1,27 @@
 import { useRef, useEffect, useState } from 'react';
-import { Stage, Layer, Rect, Text, Arrow, Group, Circle, Line } from 'react-konva';
+import { Stage, Layer, Rect, Text, Arrow, Group, Line } from 'react-konva';
+import Konva from 'konva';
 import { useStore } from '../store/useStore';
-import type { HeapStructure, HeapNode } from '../types';
+import type { HeapStructure, HeapNode, DiffAction } from '../types';
 
 // Layout constants
 const NODE_W = 88;
 const NODE_H = 44;
-const NODE_GAP = 70; // horizontal gap between node centers
+const NODE_GAP = 70;
 const NODE_RADIUS = 6;
 const START_X = 60;
 const CENTER_Y = 160;
 
 export default function CanvasArea() {
   const snapshot = useStore((s) => s.snapshot);
+  const diffActions = useStore((s) => s.diffActions);
   const status = useStore((s) => s.status);
   const containerRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<Konva.Stage>(null);
   const [size, setSize] = useState({ w: 600, h: 320 });
+
+  // Track previously seen actions to avoid re-animating
+  const prevActionsLen = useRef(0);
 
   const isIdle = status === 'idle' || status === 'ready';
   const isTerminated = status === 'terminated';
@@ -34,17 +40,93 @@ export default function CanvasArea() {
     return () => ro.disconnect();
   }, []);
 
-  // Empty state
+  // Play diff animations when new actions arrive
+  useEffect(() => {
+    if (!diffActions || diffActions.length === 0) return;
+    // Only process new actions
+    const newCount = diffActions.length - prevActionsLen.current;
+    if (newCount <= 0) return;
+
+    const newActions = diffActions.slice(prevActionsLen.current);
+    prevActionsLen.current = diffActions.length;
+
+    const layer = stageRef.current?.getLayers()?.[0];
+    if (!layer) return;
+
+    // Group actions by type for efficient batch processing
+    const createdAddrs = new Set<string>();
+    const removedAddrs = new Set<string>();
+    const changedAddrs = new Map<string, Record<string, { old: string; new: string }>>();
+
+    for (const action of newActions) {
+      switch (action.action) {
+        case 'node_created':
+          createdAddrs.add(action.node_addr);
+          break;
+        case 'node_removed':
+          removedAddrs.add(action.node_addr);
+          break;
+        case 'value_changed':
+          changedAddrs.set(action.node_addr,
+            (action.detail?.changed_fields as Record<string, { old: string; new: string }>) ?? {});
+          break;
+      }
+    }
+
+    // Animate created nodes: find them by name and pop in
+    createdAddrs.forEach((addr) => {
+      const nodeGroup = layer.findOne(`.node-${addr}`);
+      if (nodeGroup) {
+        nodeGroup.scaleX(0);
+        nodeGroup.scaleY(0);
+        nodeGroup.opacity(0);
+        nodeGroup.to({
+          scaleX: 1, scaleY: 1, opacity: 1,
+          duration: 0.4,
+          easing: Konva.Easings.EaseOut,
+        });
+      }
+    });
+
+    // Animate value changes: flash effect on label text
+    changedAddrs.forEach((fields, addr) => {
+      const labelText = layer.findOne(`.label-${addr}`);
+      if (!labelText) return;
+
+      labelText.to({
+        scaleX: 0.6, scaleY: 0.6, opacity: 0,
+        duration: 0.12,
+        onFinish: () => {
+          labelText.to({
+            scaleX: 1.1, scaleY: 1.1, opacity: 1, fill: '#2e7d32',
+            duration: 0.15,
+            onFinish: () => {
+              labelText.to({
+                scaleX: 1, scaleY: 1, fill: '#333',
+                duration: 0.13,
+              });
+            },
+          });
+        },
+      });
+    });
+  }, [diffActions]);
+
+  // Reset prevActionsLen when structures change (new debug session)
+  useEffect(() => {
+    prevActionsLen.current = 0;
+  }, [snapshot?.step_number]);
+
+  // ---- Empty / terminal states ----
+
   if (isIdle || (structures.length === 0 && !isTerminated)) {
     return (
       <div
         ref={containerRef}
         style={{
           height: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center',
           background: '#f9f9fb',
         }}
       >
@@ -78,7 +160,7 @@ export default function CanvasArea() {
 
   return (
     <div ref={containerRef} style={{ height: '100%', background: '#f9f9fb' }}>
-      <Stage width={size.w} height={size.h}>
+      <Stage ref={stageRef} width={size.w} height={size.h}>
         <Layer>
           {structures.map((struct) =>
             renderLinkedList(struct, size)
@@ -93,10 +175,12 @@ export default function CanvasArea() {
 // Linked list rendering
 // ---------------------------------------------------------------------------
 
-function renderLinkedList(struct: HeapStructure, canvasSize: { w: number; h: number }) {
+function renderLinkedList(
+  struct: HeapStructure,
+  canvasSize: { w: number; h: number },
+) {
   const nodes = struct.nodes;
   if (nodes.length === 0) {
-    // Show a "null" indicator
     return (
       <Group key={`${struct.annotation_name}-empty`} x={canvasSize.w / 2 - 30} y={canvasSize.h / 2 - 20}>
         <Rect width={60} height={40} cornerRadius={4} fill="#f5f5f5" stroke="#ccc" strokeWidth={1} />
@@ -116,9 +200,7 @@ function renderLinkedList(struct: HeapStructure, canvasSize: { w: number; h: num
   nodes.forEach((node, i) => {
     const x = startX + i * (NODE_W + NODE_GAP);
     const y = CENTER_Y - NODE_H / 2;
-    const cx = x + NODE_W / 2;
-    const cy = y + NODE_H / 2;
-    positions[node.addr] = { x, y, cx, cy };
+    positions[node.addr] = { x, y, cx: x + NODE_W / 2, cy: y + NODE_H / 2 };
   });
 
   // Arrows between nodes
@@ -129,11 +211,8 @@ function renderLinkedList(struct: HeapStructure, canvasSize: { w: number; h: num
       <Arrow
         key={`arrow-${i}`}
         points={[from.cx + NODE_W / 2 + 4, from.cy, to.cx - NODE_W / 2 - 4, to.cy]}
-        pointerLength={8}
-        pointerWidth={8}
-        fill="#888"
-        stroke="#888"
-        strokeWidth={2}
+        pointerLength={8} pointerWidth={8}
+        fill="#888" stroke="#888" strokeWidth={2}
       />
     );
   }
@@ -143,14 +222,9 @@ function renderLinkedList(struct: HeapStructure, canvasSize: { w: number; h: num
     const last = nodes[nodes.length - 1];
     const lp = positions[last.addr];
     elements.push(
-      <Text
-        key="nullptr"
-        text="∅"
-        x={lp.cx + NODE_W / 2 + 12}
-        y={lp.cy - 8}
-        fontSize={16}
-        fill="#bbb"
-        fontStyle="bold"
+      <Text key="nullptr" text="∅"
+        x={lp.cx + NODE_W / 2 + 12} y={lp.cy - 8}
+        fontSize={16} fill="#bbb" fontStyle="bold"
       />
     );
   }
@@ -161,13 +235,13 @@ function renderLinkedList(struct: HeapStructure, canvasSize: { w: number; h: num
     const hasPointers = node.pointers_pointing_here.length > 0;
 
     elements.push(
-      <Group key={`node-${node.addr}`}>
-        {/* Node body */}
+      <Group
+        key={`node-${node.addr}`}
+        name={`node-${node.addr}`}
+      >
         <Rect
-          x={x}
-          y={y}
-          width={NODE_W}
-          height={NODE_H}
+          x={x} y={y}
+          width={NODE_W} height={NODE_H}
           cornerRadius={NODE_RADIUS}
           fill={hasPointers ? '#e3f2fd' : '#fff'}
           stroke={hasPointers ? '#1a73e8' : '#c0c0c0'}
@@ -175,30 +249,20 @@ function renderLinkedList(struct: HeapStructure, canvasSize: { w: number; h: num
           shadowColor={hasPointers ? 'rgba(26,115,232,0.15)' : 'transparent'}
           shadowBlur={6}
         />
-        {/* Label */}
         <Text
+          name={`label-${node.addr}`}
           text={node.label}
-          x={x}
-          y={y + 6}
-          width={NODE_W}
-          height={20}
-          align="center"
-          verticalAlign="middle"
-          fontSize={12}
-          fontStyle="bold"
-          fill="#333"
+          x={x} y={y + 6}
+          width={NODE_W} height={20}
+          align="center" verticalAlign="middle"
+          fontSize={12} fontStyle="bold" fill="#333"
         />
-        {/* Address */}
         <Text
           text={shortAddr(node.addr)}
-          x={x}
-          y={y + 24}
-          width={NODE_W}
-          height={16}
-          align="center"
-          verticalAlign="middle"
-          fontSize={9}
-          fill="#bbb"
+          x={x} y={y + 24}
+          width={NODE_W} height={16}
+          align="center" verticalAlign="middle"
+          fontSize={9} fill="#bbb"
         />
       </Group>
     );
@@ -213,61 +277,41 @@ function renderLinkedList(struct: HeapStructure, canvasSize: { w: number; h: num
     ptrs.forEach((ptr, pi) => {
       const labelY = CENTER_Y + NODE_H / 2 + 14 + pi * 20;
 
-      // Dashed line from pointer to node
       elements.push(
         <Line
           key={`ptr-line-${node.addr}-${ptr}`}
           points={[cx, CENTER_Y + NODE_H / 2, cx, labelY - 4]}
-          stroke="#e65100"
-          strokeWidth={1}
-          dash={[3, 3]}
+          stroke="#e65100" strokeWidth={1} dash={[3, 3]}
         />
       );
-
-      // Pointer label background
       elements.push(
         <Rect
           key={`ptr-bg-${node.addr}-${ptr}`}
-          x={cx - 24}
-          y={labelY - 2}
-          width={48}
-          height={18}
-          cornerRadius={3}
-          fill="#fff3e0"
-          stroke="#e65100"
-          strokeWidth={1}
+          x={cx - 24} y={labelY - 2}
+          width={48} height={18} cornerRadius={3}
+          fill="#fff3e0" stroke="#e65100" strokeWidth={1}
         />
       );
-
-      // Pointer name
       elements.push(
         <Text
           key={`ptr-text-${node.addr}-${ptr}`}
           text={ptr}
-          x={cx - 24}
-          y={labelY - 2}
-          width={48}
-          height={18}
-          align="center"
-          verticalAlign="middle"
-          fontSize={10}
-          fontStyle="bold"
-          fill="#e65100"
+          x={cx - 24} y={labelY - 2}
+          width={48} height={18}
+          align="center" verticalAlign="middle"
+          fontSize={10} fontStyle="bold" fill="#e65100"
         />
       );
     });
   });
 
-  // Structure name label (top-left)
+  // Structure name label
   elements.push(
     <Text
       key="struct-name"
       text={struct.annotation_name}
-      x={START_X}
-      y={CENTER_Y - NODE_H / 2 - 32}
-      fontSize={11}
-      fill="#999"
-      fontStyle="bold"
+      x={START_X} y={CENTER_Y - NODE_H / 2 - 32}
+      fontSize={11} fill="#999" fontStyle="bold"
     />
   );
 
@@ -276,6 +320,5 @@ function renderLinkedList(struct: HeapStructure, canvasSize: { w: number; h: num
 
 function shortAddr(addr: string): string {
   if (!addr || addr === '0x0') return 'nullptr';
-  // Show last 4 hex digits
   return '…' + addr.slice(-4);
 }

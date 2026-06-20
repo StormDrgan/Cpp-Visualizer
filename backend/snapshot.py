@@ -34,9 +34,9 @@ def build_snapshot(
             "name": var.name,
             "type": var.type,
             "value": var.value,
-            "display_value": var.value,
+            "display_value": var.display_value or var.value,
             "is_pointer": var.is_pointer,
-            "deref_type": None,
+            "deref_type": var.deref_type,
         })
 
     # Call stack

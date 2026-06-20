@@ -32,6 +32,8 @@ class Variable:
     type: str
     value: str
     is_pointer: bool = False
+    display_value: str = ""
+    deref_type: str | None = None
 
 
 @dataclass
@@ -272,6 +274,8 @@ class LLDBController(DebuggerController):
                 type=item.get("type", ""),
                 value=item.get("value", ""),
                 is_pointer=item.get("is_pointer", False),
+                display_value=item.get("display_value", item.get("value", "")),
+                deref_type=item.get("deref_type"),
             ))
 
         # Parse call stack

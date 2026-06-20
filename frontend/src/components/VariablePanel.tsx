@@ -104,14 +104,19 @@ export default function VariablePanel() {
                         color: v.is_pointer ? '#e65100' : '#2e7d32',
                         textAlign: 'right',
                         fontWeight: v.is_pointer ? 500 : 400,
-                        maxWidth: 90,
+                        maxWidth: 180,
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
                       }}
-                      title={v.value}
+                      title={v.display_value || v.value}
                     >
-                      {v.value}
+                      {v.display_value || v.value}
+                      {v.deref_type && (
+                        <span style={{ color: '#999', fontSize: 10, marginLeft: 2 }}>
+                          ({v.deref_type})
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))}

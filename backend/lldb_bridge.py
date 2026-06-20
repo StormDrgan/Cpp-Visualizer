@@ -440,13 +440,27 @@ def _build_state(process: lldb.SBProcess, source_file: str, is_terminated: bool 
             continue
         type_name = str(val.GetTypeName() or "")
         summary = val.GetSummary()
-        display_value = str(summary).strip('"') if summary else str(val.GetValue() or "").strip('"')
+        raw_value = str(val.GetValue() or "").strip('"')
+        display_value = str(summary).strip('"') if summary else raw_value
         is_ptr = type_name.endswith("*") or type_name.endswith(" *")
+
+        # Try to dereference pointer to get the pointed-to value
+        deref_type = None
+        if is_ptr and not _is_null(raw_value):
+            deref_val = val.Dereference()
+            if deref_val and deref_val.IsValid():
+                deref_type = str(deref_val.GetTypeName() or type_name.replace("*", "").strip())
+                deref_summary = deref_val.GetSummary()
+                if deref_summary:
+                    display_value = f"{raw_value} → {deref_summary}"
+
         locals_list.append({
             "name": str(name),
             "type": type_name,
-            "value": display_value,
+            "value": raw_value,
+            "display_value": display_value,
             "is_pointer": is_ptr,
+            "deref_type": deref_type,
         })
 
     # Call stack
