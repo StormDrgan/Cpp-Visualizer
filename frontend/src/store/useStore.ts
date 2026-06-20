@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { StateSnapshot, CompileError, SessionStatus, DiffAction, Annotation } from '../types';
 import { api } from '../api/client';
+import { TEMPLATES, DEFAULT_TEMPLATE_ID } from '../templates';
 
 interface Store {
   sessionId: string | null;
@@ -12,6 +13,7 @@ interface Store {
   breakpoints: Set<number>;
   compileErrors: CompileError[];
   error: string | null;
+  activeTemplateId: string | null;
 
   createSession: () => Promise<void>;
   loadCode: (code: string) => Promise<void>;
@@ -26,56 +28,11 @@ interface Store {
   addAnnotation: (ann: Annotation) => void;
   removeAnnotation: (index: number) => void;
   setAnnotations: (anns: Annotation[]) => void;
+  loadTemplate: (templateId: string) => void;
 }
 
-const 默认代码 = `#include <iostream>
-using namespace std;
-
-// @viz linked_list(list1) head=head.next_field=next
-// @viz watch(slow, fast)
-struct ListNode {
-    int val;
-    ListNode* next;
-    ListNode(int x) : val(x), next(nullptr) {}
-};
-
-// @viz binary_tree(bt) root=root.left_field=left.right_field=right
-struct TreeNode {
-    int val;
-    TreeNode* left;
-    TreeNode* right;
-    TreeNode(int x) : val(x), left(nullptr), right(nullptr) {}
-};
-
-int main() {
-    // ===== 链表: 1 -> 2 -> 3 -> 4 =====
-    ListNode* head = new ListNode(1);
-    head->next = new ListNode(2);
-    head->next->next = new ListNode(3);
-    head->next->next->next = new ListNode(4);
-
-    // 双指针遍历
-    ListNode* slow = head;
-    ListNode* fast = head;
-
-    while (fast && fast->next) {
-        slow = slow->next;
-        fast = fast->next->next;
-    }
-
-    // ===== 二叉树: 构建搜索树 =====
-    TreeNode* root = new TreeNode(5);
-    root->left = new TreeNode(3);
-    root->right = new TreeNode(8);
-    root->left->left = new TreeNode(1);
-    root->left->right = new TreeNode(4);
-    root->right->right = new TreeNode(9);
-
-    cout << "list middle = " << slow->val << endl;
-    cout << "tree root = " << root->val << endl;
-    return 0;
-}
-`;
+const 默认模板 = TEMPLATES.find((t) => t.id === DEFAULT_TEMPLATE_ID) ?? TEMPLATES[0];
+const 默认代码 = 默认模板.code;
 
 // Helper: extract diff_actions from API response if present
 function extractDiff(response: { diff_actions?: unknown[] }): DiffAction[] {
@@ -88,10 +45,11 @@ export const useStore = create<Store>((set, get) => ({
   code: 默认代码,
   snapshot: null,
   diffActions: [],
-  annotations: [],
+  annotations: 默认模板.annotations,
   breakpoints: new Set<number>(),
   compileErrors: [],
   error: null,
+  activeTemplateId: DEFAULT_TEMPLATE_ID,
 
   createSession: async () => {
     try {
@@ -309,5 +267,15 @@ export const useStore = create<Store>((set, get) => ({
 
   setAnnotations: (anns: Annotation[]) => {
     set({ annotations: anns });
+  },
+
+  loadTemplate: (templateId: string) => {
+    const template = TEMPLATES.find((t) => t.id === templateId);
+    if (!template) return;
+    set({
+      code: template.code,
+      annotations: template.annotations,
+      activeTemplateId: templateId,
+    });
   },
 }));

@@ -1,4 +1,5 @@
 import { useStore } from '../store/useStore';
+import { TEMPLATES } from '../templates';
 
 const 状态映射: Record<string, { 标签: string; 颜色: string }> = {
   idle: { 标签: '空闲', 颜色: '#9e9e9e' },
@@ -15,6 +16,8 @@ export default function Header() {
   const 当前行 = useStore((s) => s.snapshot?.source_line ?? null);
   const 当前函数 = useStore((s) => s.snapshot?.current_function ?? null);
   const 会话ID = useStore((s) => s.sessionId);
+  const activeTemplateId = useStore((s) => s.activeTemplateId);
+  const loadTemplate = useStore((s) => s.loadTemplate);
 
   const info = 状态映射[状态] ?? 状态映射.idle;
 
@@ -46,6 +49,30 @@ export default function Header() {
 
       {/* 分割线 */}
       <div style={{ width: 1, height: 18, background: '#e0e0e0' }} />
+
+      {/* 模板选择器 */}
+      <select
+        value={activeTemplateId ?? ''}
+        onChange={(e) => loadTemplate(e.target.value)}
+        style={{
+          fontSize: 12,
+          fontFamily: 'inherit',
+          color: '#444',
+          background: '#fafafa',
+          border: '1px solid #e0e0e0',
+          borderRadius: 4,
+          padding: '3px 6px',
+          cursor: 'pointer',
+          outline: 'none',
+          minWidth: 130,
+        }}
+      >
+        {TEMPLATES.map((t) => (
+          <option key={t.id} value={t.id}>
+            {t.icon} {t.label}
+          </option>
+        ))}
+      </select>
 
       {/* 状态指示器 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
