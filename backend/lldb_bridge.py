@@ -585,6 +585,21 @@ def _build_state(process: lldb.SBProcess, source_file: str, is_terminated: bool 
                 deref_summary = deref_val.GetSummary()
                 if deref_summary:
                     display_value = f"{raw_value} → {deref_summary}"
+                else:
+                    # Custom structs (e.g., ListNode) don't have LLDB formatters
+                    # Build summary from child members: {val=1, next=0x...}
+                    children_parts = []
+                    num_children = deref_val.GetNumChildren()
+                    for j in range(min(num_children, 20)):  # cap at 20 fields
+                        child = deref_val.GetChildAtIndex(j)
+                        if child:
+                            cname = str(child.GetName() or "")
+                            if cname:
+                                cval = child.GetSummary() or child.GetValue() or ""
+                                cval = str(cval).strip('"')
+                                children_parts.append(f"{cname}={cval}")
+                    if children_parts:
+                        display_value = f"{raw_value} → {{{', '.join(children_parts)}}}"
 
         locals_list.append({
             "name": str(name),
