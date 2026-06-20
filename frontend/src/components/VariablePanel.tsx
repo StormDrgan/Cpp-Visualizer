@@ -108,10 +108,10 @@ export default function VariablePanel() {
           ) : (
             <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
               <thead>
-                <tr style={{ borderBottom: '1px solid #eee', color: '#999', fontSize: 11, textAlign: 'left' }}>
-                  <th style={{ padding: '6px 12px', fontWeight: 500 }}>变量名</th>
-                  <th style={{ padding: '6px 0', fontWeight: 500 }}>类型</th>
-                  <th style={{ padding: '6px 12px', fontWeight: 500, textAlign: 'right' }}>值</th>
+                <tr style={{ borderBottom: '1px solid #eee', color: '#999', fontSize: 11, textAlign: 'center' }}>
+                  <th style={{ padding: '6px 8px', fontWeight: 500 }}>变量名</th>
+                  <th style={{ padding: '6px 8px', fontWeight: 500 }}>类型</th>
+                  <th style={{ padding: '6px 8px', fontWeight: 500 }}>值</th>
                 </tr>
               </thead>
               <tbody>
@@ -124,17 +124,19 @@ export default function VariablePanel() {
                   >
                     <td
                       style={{
-                        padding: '5px 12px',
+                        padding: '5px 8px',
                         fontFamily: 'SF Mono, Menlo, Monaco, monospace',
                         color: '#1a73e8', fontWeight: 500,
+                        textAlign: 'center',
                       }}
                     >
                       {v.name}
                     </td>
                     <td
                       style={{
-                        padding: '5px 0',
+                        padding: '5px 8px',
                         fontFamily: 'SF Mono, Menlo, Monaco, monospace', color: '#888',
+                        textAlign: 'center',
                       }}
                     >
                       {v.type}
@@ -142,10 +144,10 @@ export default function VariablePanel() {
                     </td>
                     <td
                       style={{
-                        padding: '5px 12px',
+                        padding: '5px 8px',
                         fontFamily: 'SF Mono, Menlo, Monaco, monospace',
                         color: v.is_pointer ? '#e65100' : '#2e7d32',
-                        textAlign: 'right', fontWeight: v.is_pointer ? 500 : 400,
+                        textAlign: 'center', fontWeight: v.is_pointer ? 500 : 400,
                         maxWidth: 180, overflow: 'hidden',
                         textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                       }}
