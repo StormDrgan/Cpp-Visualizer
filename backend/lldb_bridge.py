@@ -58,6 +58,8 @@ def handle_command(cmd: dict, ctx: dict) -> None:
             handle_walk_linked_list(cmd, ctx)
         elif name == "walk_binary_tree":
             handle_walk_binary_tree(cmd, ctx)
+        elif name == "walk_array":
+            handle_walk_array(cmd, ctx)
         elif name == "terminate":
             handle_terminate(ctx)
             send_response({"ok": True, "result": "terminated"})
@@ -347,6 +349,102 @@ def handle_walk_binary_tree(cmd: dict, ctx: dict) -> None:
 
         nodes, edges = _walk_tree_bfs(frame, root_addr, struct_type, left_field, right_field)
         send_response({"ok": True, "result": {"nodes": nodes, "edges": edges}})
+
+    except Exception as e:
+        send_response({"ok": False, "error": str(e)})
+
+
+def handle_walk_array(cmd: dict, ctx: dict) -> None:
+    """Walk a C++ array (stack or heap), reading each element by index.
+
+    Supports both stack arrays (int arr[5]) and heap arrays (int* arr = new int[n]).
+    The length_var can be a variable name or a literal integer.
+    """
+    var_name = cmd.get("var_name", "")
+    length_var = cmd.get("length_var", "")
+    process = ctx.get("process")
+
+    if not process or not ctx.get("alive"):
+        send_response({"ok": False, "error": "No process running"})
+        return
+
+    thread = _get_thread(process)
+    if not thread:
+        send_response({"ok": False, "error": "No thread"})
+        return
+
+    frame = thread.GetFrameAtIndex(0)
+    if not frame or not frame.IsValid():
+        send_response({"ok": False, "error": "No valid frame"})
+        return
+
+    if not var_name or not length_var:
+        send_response({"ok": False, "error": "Missing var_name or length_var"})
+        return
+
+    try:
+        # Resolve length: try evaluating as variable first, then as literal
+        N = 0
+        len_result = frame.EvaluateExpression(length_var)
+        if len_result and len_result.GetError().Success():
+            try:
+                N = int(str(len_result.GetValue() or "0"))
+            except ValueError:
+                N = 0
+
+        if N <= 0:
+            # Try parsing length_var as a literal integer
+            try:
+                N = int(length_var)
+            except ValueError:
+                send_response({"ok": False, "error": f"Cannot resolve length: {length_var} (value={N})"})
+                return
+
+        # Cap array size
+        max_elements = 500
+        if N > max_elements:
+            N = max_elements
+
+        nodes = []
+        for i in range(N):
+            # Read element value
+            elem_expr = f"{var_name}[{i}]"
+            elem_result = frame.EvaluateExpression(elem_expr)
+            if not elem_result or elem_result.GetError().Fail():
+                # Try treating var_name as a pointer: *(var_name + i)
+                elem_expr2 = f"*({var_name} + {i})"
+                elem_result = frame.EvaluateExpression(elem_expr2)
+                if not elem_result or elem_result.GetError().Fail():
+                    continue
+
+            val_str = str(elem_result.GetValue() or "")
+            summary = elem_result.GetSummary()
+
+            # Read element address for pointer matching
+            addr_expr = f"&{var_name}[{i}]"
+            addr_result = frame.EvaluateExpression(addr_expr)
+            addr = "0x0"
+            if addr_result and addr_result.GetError().Success():
+                addr = str(addr_result.GetValue() or "0x0")
+            else:
+                # Fallback: pointer arithmetic for address
+                addr_expr2 = f"({var_name} + {i})"
+                addr_result2 = frame.EvaluateExpression(addr_expr2)
+                if addr_result2 and addr_result2.GetError().Success():
+                    addr = str(addr_result2.GetValue() or "0x0")
+                else:
+                    addr = f"arr[{i}]"  # synthetic address
+
+            # Clean value display
+            display = str(summary).strip('"') if summary else val_str
+
+            nodes.append({
+                "addr": addr,
+                "label": display,
+                "fields": {"index": str(i), "val": display},
+            })
+
+        send_response({"ok": True, "result": {"nodes": nodes}})
 
     except Exception as e:
         send_response({"ok": False, "error": str(e)})

@@ -187,6 +187,63 @@ class MemoryWalker:
             edges=edges,
         )
 
+    def walk_array(
+        self,
+        annotation_name: str,
+        root_var: str,
+        length_var: str = "",
+        watched_vars: list[str] | None = None,
+    ) -> TraversalResult:
+        """Walk a C++ array from root_var, reading length_var elements.
+
+        Args:
+            annotation_name: User-given name (e.g., "A").
+            root_var: C++ variable name of the array.
+            length_var: Variable name or literal integer for the element count.
+            watched_vars: Optional list of pointer variable names to match.
+
+        Returns:
+            TraversalResult with nodes for each array element.
+        """
+        if watched_vars is None:
+            watched_vars = []
+
+        resp = self._send({
+            "cmd": "walk_array",
+            "var_name": root_var,
+            "length_var": length_var,
+        })
+
+        if not resp.get("ok"):
+            return TraversalResult(
+                annotation_name=annotation_name,
+                structure_type="array",
+                root_node_addr="0x0",
+            )
+
+        result = resp.get("result", {})
+        raw_nodes = result.get("nodes", [])
+        root_addr = raw_nodes[0]["addr"] if raw_nodes else "0x0"
+
+        nodes = []
+        for n in raw_nodes:
+            nodes.append(HeapNode(
+                addr=n.get("addr", "0x0"),
+                label=n.get("label", ""),
+                fields=n.get("fields", {}),
+            ))
+
+        # Match watched pointers to array element addresses
+        if watched_vars and nodes:
+            self._match_pointers(nodes, watched_vars)
+
+        return TraversalResult(
+            annotation_name=annotation_name,
+            structure_type="array",
+            root_node_addr=root_addr,
+            nodes=nodes,
+        )
+
     def _match_pointers(self, nodes: list[HeapNode], watched_vars: list[str]) -> None:
         """For each watched variable, find which node it points to."""
         for var in watched_vars:

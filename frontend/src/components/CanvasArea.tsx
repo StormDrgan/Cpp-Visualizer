@@ -17,6 +17,12 @@ const CONTENT_MARGIN = 60;
 const TREE_NODE_RADIUS = 20;
 const TREE_LEVEL_H = 72;
 
+// Array layout constants
+const ARRAY_CELL_W = 72;
+const ARRAY_CELL_H = 40;
+const ARRAY_GAP = 4;
+const ARRAY_START_Y = 130;
+
 // ---- Content bounds type ----
 interface ContentBounds {
   minX: number;
@@ -120,6 +126,48 @@ function getBinaryTreeLayout(
   return { positions, bounds: { minX, maxX, minY, maxY } };
 }
 
+// ---- Array layout helper ----
+interface ArrayLayout {
+  positions: Record<string, { x: number; y: number; cx: number; cy: number }>;
+  startX: number;
+  bounds: ContentBounds;
+}
+
+function getArrayLayout(
+  struct: HeapStructure,
+  canvasSize: { w: number; h: number },
+): ArrayLayout | null {
+  const nodes = struct.nodes;
+  if (nodes.length === 0) return null;
+
+  const totalWidth = nodes.length * ARRAY_CELL_W + (nodes.length - 1) * ARRAY_GAP;
+  const startX = Math.max(START_X, (canvasSize.w - totalWidth) / 2);
+
+  const positions: Record<string, { x: number; y: number; cx: number; cy: number }> = {};
+  nodes.forEach((node, i) => {
+    const x = startX + i * (ARRAY_CELL_W + ARRAY_GAP);
+    const y = ARRAY_START_Y;
+    positions[node.addr] = { x, y, cx: x + ARRAY_CELL_W / 2, cy: y + ARRAY_CELL_H / 2 };
+  });
+
+  let maxPtrs = 0;
+  for (const n of nodes) {
+    maxPtrs = Math.max(maxPtrs, n.pointers_pointing_here.length);
+  }
+  const bottomExtra = maxPtrs > 0 ? 14 + maxPtrs * 20 : 8;
+  // Extra space for index labels below cells
+  const indexLabelExtra = 20;
+
+  const bounds: ContentBounds = {
+    minX: startX - CONTENT_MARGIN,
+    maxX: startX + totalWidth + CONTENT_MARGIN,
+    minY: ARRAY_START_Y - 32,
+    maxY: ARRAY_START_Y + ARRAY_CELL_H + indexLabelExtra + bottomExtra,
+  };
+
+  return { positions, startX, bounds };
+}
+
 // ---- Merge bounds ----
 function mergeBounds(all: ContentBounds[]): ContentBounds {
   if (all.length === 0) return { minX: 0, maxX: 100, minY: 0, maxY: 100 };
@@ -160,6 +208,9 @@ export default function CanvasArea() {
     for (const struct of structures) {
       if (struct.structure_type === 'binary_tree') {
         const layout = getBinaryTreeLayout(struct, layoutCanvas);
+        if (layout) all.push(layout.bounds);
+      } else if (struct.structure_type === 'array') {
+        const layout = getArrayLayout(struct, layoutCanvas);
         if (layout) all.push(layout.bounds);
       } else {
         const layout = getLinkedListLayout(struct, layoutCanvas);
@@ -365,11 +416,11 @@ export default function CanvasArea() {
         scaleX={stageScale} scaleY={stageScale}
       >
         <Layer>
-          {structures.map((struct) =>
-            struct.structure_type === 'binary_tree'
-              ? renderBinaryTree(struct, stageSize)
-              : renderLinkedList(struct, stageSize)
-          )}
+          {structures.map((struct) => {
+            if (struct.structure_type === 'binary_tree') return renderBinaryTree(struct, stageSize);
+            if (struct.structure_type === 'array') return renderArray(struct, stageSize);
+            return renderLinkedList(struct, stageSize);
+          })}
         </Layer>
       </Stage>
     </div>
@@ -507,6 +558,120 @@ function renderLinkedList(
       key="struct-name"
       text={struct.annotation_name}
       x={startX} y={CENTER_Y - NODE_H / 2 - 32}
+      fontSize={11} fill="#999" fontStyle="bold"
+    />
+  );
+
+  return <Group key={struct.annotation_name}>{elements}</Group>;
+}
+
+// ---------------------------------------------------------------------------
+// Array rendering
+// ---------------------------------------------------------------------------
+
+function renderArray(
+  struct: HeapStructure,
+  canvasSize: { w: number; h: number },
+) {
+  const layout = getArrayLayout(struct, canvasSize);
+  if (!layout) {
+    return (
+      <Group key={`${struct.annotation_name}-empty`} x={canvasSize.w / 2 - 40} y={canvasSize.h / 2 - 20}>
+        <Rect width={80} height={40} cornerRadius={4} fill="#f5f5f5" stroke="#ccc" strokeWidth={1} />
+        <Text text="EMPTY" x={0} y={0} width={80} height={40} align="center" verticalAlign="middle" fontSize={12} fill="#999" fontStyle="bold" />
+        <Text text={struct.annotation_name} x={40} y={45} fontSize={11} fill="#bbb" align="center" />
+      </Group>
+    );
+  }
+
+  const { positions, startX } = layout;
+  const { nodes } = struct;
+  const elements: React.ReactNode[] = [];
+
+  // Cell rectangles + value labels + index labels
+  nodes.forEach((node) => {
+    const { x, y, cx } = positions[node.addr];
+    const hasPointers = node.pointers_pointing_here.length > 0;
+    const idx = (node.fields as Record<string, string>).index ?? '';
+
+    elements.push(
+      <Group
+        key={`arr-node-${node.addr}`}
+        name={`node-${node.addr}`}
+      >
+        <Rect
+          x={x} y={y}
+          width={ARRAY_CELL_W} height={ARRAY_CELL_H}
+          cornerRadius={4}
+          fill={hasPointers ? '#e8f5e9' : '#fff'}
+          stroke={hasPointers ? '#2e7d32' : '#c0c0c0'}
+          strokeWidth={hasPointers ? 2 : 1}
+          shadowColor={hasPointers ? 'rgba(46,125,50,0.15)' : 'transparent'}
+          shadowBlur={6}
+        />
+        <Text
+          name={`label-${node.addr}`}
+          text={node.label}
+          x={x} y={y + 4}
+          width={ARRAY_CELL_W} height={20}
+          align="center" verticalAlign="middle"
+          fontSize={13} fontStyle="bold" fill="#333"
+        />
+        {/* Index label below cell */}
+        <Text
+          text={`[${idx}]`}
+          x={x} y={y + ARRAY_CELL_H + 2}
+          width={ARRAY_CELL_W} height={16}
+          align="center" verticalAlign="middle"
+          fontSize={10} fill="#aaa"
+        />
+      </Group>
+    );
+  });
+
+  // Pointer labels (below index labels)
+  nodes.forEach((node) => {
+    const ptrs = node.pointers_pointing_here;
+    if (ptrs.length === 0) return;
+    const { cx } = positions[node.addr];
+
+    ptrs.forEach((ptr, pi) => {
+      const labelY = ARRAY_START_Y + ARRAY_CELL_H + 22 + pi * 20;
+
+      elements.push(
+        <Line
+          key={`ptr-line-${node.addr}-${ptr}`}
+          points={[cx, ARRAY_START_Y + ARRAY_CELL_H + 18, cx, labelY - 4]}
+          stroke="#e65100" strokeWidth={1} dash={[3, 3]}
+        />
+      );
+      elements.push(
+        <Rect
+          key={`ptr-bg-${node.addr}-${ptr}`}
+          x={cx - 24} y={labelY - 2}
+          width={48} height={18} cornerRadius={3}
+          fill="#fff3e0" stroke="#e65100" strokeWidth={1}
+        />
+      );
+      elements.push(
+        <Text
+          key={`ptr-text-${node.addr}-${ptr}`}
+          text={ptr}
+          x={cx - 24} y={labelY - 2}
+          width={48} height={18}
+          align="center" verticalAlign="middle"
+          fontSize={10} fontStyle="bold" fill="#e65100"
+        />
+      );
+    });
+  });
+
+  // Structure name label
+  elements.push(
+    <Text
+      key="struct-name"
+      text={struct.annotation_name}
+      x={startX} y={ARRAY_START_Y - 28}
       fontSize={11} fill="#999" fontStyle="bold"
     />
   );

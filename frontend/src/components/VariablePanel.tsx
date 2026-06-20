@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useStore } from '../store/useStore';
 import type { Annotation } from '../types';
 
-type AnnotationType = 'linked_list' | 'binary_tree' | 'watch';
+type AnnotationType = 'linked_list' | 'binary_tree' | 'array' | 'watch';
 
 export default function VariablePanel() {
   const snapshot = useStore((s) => s.snapshot);
@@ -20,6 +20,7 @@ export default function VariablePanel() {
   const [annNext, setAnnNext] = useState('next');
   const [annLeft, setAnnLeft] = useState('left');
   const [annRight, setAnnRight] = useState('right');
+  const [annLengthVar, setAnnLengthVar] = useState('');
   const [annWatchVars, setAnnWatchVars] = useState('');
 
   const handleAddAnnotation = () => {
@@ -47,6 +48,18 @@ export default function VariablePanel() {
         right_field: annRight.trim() || 'right',
         watched_vars: [],
       });
+    } else if (annType === 'array') {
+      if (!annName.trim() || !annRoot.trim() || !annLengthVar.trim()) return;
+      addAnnotation({
+        struct_type: 'array',
+        name: annName.trim(),
+        root_var: annRoot.trim(),
+        next_field: '',
+        left_field: '',
+        right_field: '',
+        length_var: annLengthVar.trim(),
+        watched_vars: [],
+      });
     } else {
       const vars = annWatchVars.split(',').map((v) => v.trim()).filter(Boolean);
       if (vars.length === 0) return;
@@ -64,6 +77,7 @@ export default function VariablePanel() {
     // Reset form
     setAnnName('');
     setAnnRoot('');
+    setAnnLengthVar('');
     setAnnWatchVars('');
   };
 
@@ -278,6 +292,11 @@ export default function VariablePanel() {
                           <span style={{ color: '#2e7d32' }}>🌳</span>
                           {' '}{ann.name}: root={ann.root_var} ({ann.left_field || 'left'}, {ann.right_field || 'right'})
                         </>
+                      ) : ann.struct_type === 'array' ? (
+                        <>
+                          <span style={{ color: '#2e7d32' }}>📊</span>
+                          {' '}{ann.name}: var={ann.root_var}.length={ann.length_var ?? '?'}
+                        </>
                       ) : (
                         <>
                           <span style={{ color: '#e65100' }}>👁️</span>
@@ -324,6 +343,17 @@ export default function VariablePanel() {
                   }}
                 >
                   🌳 二叉树
+                </button>
+                <button
+                  onClick={() => setAnnType('array')}
+                  style={{
+                    flex: 1, padding: '4px 0', fontSize: 11, borderRadius: 3, border: '1px solid #ddd',
+                    background: annType === 'array' ? '#e8f5e9' : '#fff',
+                    color: annType === 'array' ? '#2e7d32' : '#999',
+                    cursor: 'pointer', fontWeight: annType === 'array' ? 600 : 400,
+                  }}
+                >
+                  📊 数组
                 </button>
                 <button
                   onClick={() => setAnnType('watch')}
@@ -387,6 +417,27 @@ export default function VariablePanel() {
                       style={{ ...inputStyle, flex: 1, marginBottom: 0 }}
                     />
                   </div>
+                </>
+              ) : annType === 'array' ? (
+                <>
+                  <input
+                    placeholder="标注名 例如 A"
+                    value={annName}
+                    onChange={(e) => setAnnName(e.target.value)}
+                    style={inputStyle}
+                  />
+                  <input
+                    placeholder="数组变量 例如 arr"
+                    value={annRoot}
+                    onChange={(e) => setAnnRoot(e.target.value)}
+                    style={inputStyle}
+                  />
+                  <input
+                    placeholder="长度变量/值 例如 n 或 10"
+                    value={annLengthVar}
+                    onChange={(e) => setAnnLengthVar(e.target.value)}
+                    style={inputStyle}
+                  />
                 </>
               ) : (
                 <input

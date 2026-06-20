@@ -98,6 +98,14 @@ def _build_heap_structures(
                 watched_vars=watched,
             )
             structures.append(_traversal_to_dict(result))
+        elif ann.struct_type == "array":
+            result = walker.walk_array(
+                annotation_name=ann.name,
+                root_var=ann.root_var,
+                length_var=ann.length_var,
+                watched_vars=watched,
+            )
+            structures.append(_traversal_to_dict(result))
 
     return structures
 

@@ -76,6 +76,7 @@ export interface Annotation {
   next_field: string;
   left_field: string;
   right_field: string;
+  length_var?: string;
   watched_vars: string[];
 }
 
