@@ -4,7 +4,7 @@ See DESIGN.md §3.4 for the full StateSnapshot schema.
 """
 
 from __future__ import annotations
-from memory_walker import MemoryWalker, TraversalResult
+from memory_walker import MemoryWalker, TraversalResult, TreeEdge
 from annotations import Annotation, get_watched_vars
 
 
@@ -89,6 +89,15 @@ def _build_heap_structures(
                 watched_vars=watched,
             )
             structures.append(_traversal_to_dict(result))
+        elif ann.struct_type == "binary_tree":
+            result = walker.walk_binary_tree(
+                annotation_name=ann.name,
+                root_var=ann.root_var,
+                left_field=ann.left_field or "left",
+                right_field=ann.right_field or "right",
+                watched_vars=watched,
+            )
+            structures.append(_traversal_to_dict(result))
 
     return structures
 
@@ -104,10 +113,19 @@ def _traversal_to_dict(result: TraversalResult) -> dict:
             "pointers_pointing_here": n.pointers_pointing_here,
         })
 
+    edges = []
+    for e in result.edges:
+        edges.append({
+            "from_idx": e.from_idx,
+            "to_idx": e.to_idx,
+            "child_side": e.child_side,
+        })
+
     return {
         "annotation_name": result.annotation_name,
         "structure_type": result.structure_type,
         "root_node_addr": result.root_node_addr,
         "nodes": nodes,
+        "edges": edges,
         "cycle_detected": result.cycle_detected,
     }

@@ -22,11 +22,18 @@ export interface HeapNode {
   pointers_pointing_here: string[];
 }
 
+export interface TreeEdge {
+  from_idx: number;
+  to_idx: number;
+  child_side: string;
+}
+
 export interface HeapStructure {
   annotation_name: string;
   structure_type: string;
   root_node_addr: string;
   nodes: HeapNode[];
+  edges: TreeEdge[];
   cycle_detected: boolean;
 }
 
@@ -67,6 +74,8 @@ export interface Annotation {
   name: string;
   root_var: string;
   next_field: string;
+  left_field: string;
+  right_field: string;
   watched_vars: string[];
 }
 

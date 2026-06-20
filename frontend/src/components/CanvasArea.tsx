@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState } from 'react';
-import { Stage, Layer, Rect, Text, Arrow, Group, Line } from 'react-konva';
+import { Stage, Layer, Rect, Text, Arrow, Group, Line, Circle } from 'react-konva';
 import Konva from 'konva';
 import { useStore } from '../store/useStore';
 import type { HeapStructure, HeapNode, DiffAction } from '../types';
@@ -163,7 +163,9 @@ export default function CanvasArea() {
       <Stage ref={stageRef} width={size.w} height={size.h}>
         <Layer>
           {structures.map((struct) =>
-            renderLinkedList(struct, size)
+            struct.structure_type === 'binary_tree'
+              ? renderBinaryTree(struct, size)
+              : renderLinkedList(struct, size)
           )}
         </Layer>
       </Stage>
@@ -321,4 +323,165 @@ function renderLinkedList(
 function shortAddr(addr: string): string {
   if (!addr || addr === '0x0') return 'nullptr';
   return '…' + addr.slice(-4);
+}
+
+// ---------------------------------------------------------------------------
+// Binary tree rendering
+// ---------------------------------------------------------------------------
+
+const TREE_NODE_W = 56;
+const TREE_NODE_H = 40;
+const TREE_NODE_RADIUS = 20; // circle radius
+const TREE_LEVEL_H = 72;     // vertical gap between levels
+
+function renderBinaryTree(
+  struct: HeapStructure,
+  canvasSize: { w: number; h: number },
+) {
+  const nodes = struct.nodes;
+  const edges = struct.edges;
+  if (nodes.length === 0) {
+    return (
+      <Group key={`${struct.annotation_name}-empty`} x={canvasSize.w / 2 - 40} y={canvasSize.h / 2 - 20}>
+        <Rect width={80} height={40} cornerRadius={4} fill="#f5f5f5" stroke="#ccc" strokeWidth={1} />
+        <Text text="EMPTY" x={0} y={0} width={80} height={40} align="center" verticalAlign="middle" fontSize={12} fill="#999" fontStyle="bold" />
+        <Text text={struct.annotation_name} x={40} y={45} fontSize={11} fill="#bbb" align="center" />
+      </Group>
+    );
+  }
+
+  // Compute node depths via BFS on edges
+  const depth: number[] = new Array(nodes.length).fill(0);
+  const children: Record<number, number[]> = {}; // parent_idx → [child_idx, ...]
+  for (const e of edges) {
+    depth[e.to_idx] = depth[e.from_idx] + 1;
+    if (!children[e.from_idx]) children[e.from_idx] = [];
+    children[e.from_idx].push(e.to_idx);
+  }
+
+  // Group nodes by depth
+  const maxDepth = Math.max(0, ...depth);
+  const nodesByDepth: number[][] = Array.from({ length: maxDepth + 1 }, () => []);
+  for (let i = 0; i < nodes.length; i++) {
+    nodesByDepth[depth[i]].push(i);
+  }
+
+  // Layout: position nodes centered at each level
+  const positions: Record<number, { x: number; y: number }> = {};
+  const startY = 30;
+  const usableWidth = canvasSize.w - 60;
+
+  for (let level = 0; level <= maxDepth; level++) {
+    const count = nodesByDepth[level].length;
+    const gap = count > 1 ? Math.min(100, usableWidth / (count + 1)) : 0;
+    const totalWidth = count > 1 ? (count - 1) * gap : 0;
+    const startX = (canvasSize.w - totalWidth) / 2;
+
+    nodesByDepth[level].forEach((nodeIdx, i) => {
+      positions[nodeIdx] = {
+        x: count === 1 ? canvasSize.w / 2 : startX + i * gap,
+        y: startY + level * TREE_LEVEL_H,
+      };
+    });
+  }
+
+  const elements: React.ReactNode[] = [];
+
+  // Edges (lines from parent to child)
+  edges.forEach((edge, i) => {
+    const parent = positions[edge.from_idx];
+    const child = positions[edge.to_idx];
+    if (!parent || !child) return;
+    elements.push(
+      <Arrow
+        key={`tree-edge-${i}`}
+        points={[parent.x, parent.y + TREE_NODE_RADIUS, child.x, child.y - TREE_NODE_RADIUS]}
+        pointerLength={7} pointerWidth={7}
+        fill="#888" stroke="#888" strokeWidth={1.5}
+      />
+    );
+  });
+
+  // Nodes as circles
+  nodes.forEach((node, i) => {
+    const pos = positions[i];
+    if (!pos) return;
+    const hasPointers = node.pointers_pointing_here.length > 0;
+
+    elements.push(
+      <Group
+        key={`tree-node-${node.addr}`}
+        name={`node-${node.addr}`}
+        x={pos.x} y={pos.y}
+      >
+        <Circle
+          radius={TREE_NODE_RADIUS}
+          fill={hasPointers ? '#e8f5e9' : '#fff'}
+          stroke={hasPointers ? '#2e7d32' : '#c0c0c0'}
+          strokeWidth={hasPointers ? 2.5 : 1.5}
+          shadowColor={hasPointers ? 'rgba(46,125,50,0.15)' : 'transparent'}
+          shadowBlur={6}
+        />
+        <Text
+          name={`label-${node.addr}`}
+          text={node.label}
+          x={-TREE_NODE_RADIUS} y={-10}
+          width={TREE_NODE_RADIUS * 2} height={20}
+          align="center" verticalAlign="middle"
+          fontSize={13} fontStyle="bold" fill="#333"
+        />
+        <Text
+          text={shortAddr(node.addr)}
+          x={-TREE_NODE_RADIUS} y={10}
+          width={TREE_NODE_RADIUS * 2} height={14}
+          align="center" verticalAlign="middle"
+          fontSize={8} fill="#bbb"
+        />
+      </Group>
+    );
+
+    // Pointer labels
+    const ptrs = node.pointers_pointing_here;
+    ptrs.forEach((ptr, pi) => {
+      const labelY = TREE_NODE_RADIUS + 8 + pi * 18;
+      elements.push(
+        <Line
+          key={`ptr-line-${node.addr}-${ptr}`}
+          points={[0, TREE_NODE_RADIUS, 0, labelY - 2]}
+          stroke="#e65100" strokeWidth={1} dash={[3, 3]}
+        />
+      );
+      elements.push(
+        <Rect
+          key={`ptr-bg-${node.addr}-${ptr}`}
+          x={-24} y={labelY}
+          width={48} height={16} cornerRadius={3}
+          fill="#fff3e0" stroke="#e65100" strokeWidth={1}
+        />
+      );
+      elements.push(
+        <Text
+          key={`ptr-text-${node.addr}-${ptr}`}
+          text={ptr}
+          x={-24} y={labelY}
+          width={48} height={16}
+          align="center" verticalAlign="middle"
+          fontSize={9} fontStyle="bold" fill="#e65100"
+        />
+      );
+    });
+  });
+
+  // Structure name label
+  elements.push(
+    <Text
+      key="struct-name"
+      text={struct.annotation_name}
+      x={canvasSize.w / 2 - 30} y={6}
+      width={60}
+      fontSize={11} fill="#999" fontStyle="bold" align="center"
+    />
+  );
+
+  return <Group key={struct.annotation_name}>{elements}</Group>;
 }

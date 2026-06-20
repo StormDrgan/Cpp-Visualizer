@@ -56,6 +56,8 @@ def handle_command(cmd: dict, ctx: dict) -> None:
             handle_set_breakpoint(cmd, ctx)
         elif name == "walk_linked_list":
             handle_walk_linked_list(cmd, ctx)
+        elif name == "walk_binary_tree":
+            handle_walk_binary_tree(cmd, ctx)
         elif name == "terminate":
             handle_terminate(ctx)
             send_response({"ok": True, "result": "terminated"})
@@ -293,6 +295,135 @@ def handle_walk_linked_list(cmd: dict, ctx: dict) -> None:
 
     except Exception as e:
         send_response({"ok": False, "error": str(e)})
+
+
+def handle_walk_binary_tree(cmd: dict, ctx: dict) -> None:
+    """Walk a binary tree starting from root_var, following left_field and right_field.
+
+    Uses BFS to collect all nodes and their parent-child relationships.
+    """
+    root_var = cmd.get("root_var", "")
+    left_field = cmd.get("left_field", "left")
+    right_field = cmd.get("right_field", "right")
+    process = ctx.get("process")
+
+    if not process or not ctx.get("alive"):
+        send_response({"ok": False, "error": "No process running"})
+        return
+
+    thread = _get_thread(process)
+    if not thread:
+        send_response({"ok": False, "error": "No thread"})
+        return
+
+    frame = thread.GetFrameAtIndex(0)
+    if not frame or not frame.IsValid():
+        send_response({"ok": False, "error": "No valid frame"})
+        return
+
+    if not root_var:
+        send_response({"ok": False, "error": "No root_var provided"})
+        return
+
+    try:
+        # Evaluate root variable to get address and type
+        root_val = frame.EvaluateExpression(root_var)
+        if not root_val or root_val.GetError().Fail():
+            send_response({"ok": False, "error": f"Failed to evaluate {root_var}"})
+            return
+
+        root_addr = str(root_val.GetValue() or "0x0")
+        if _is_null(root_addr):
+            send_response({"ok": True, "result": {"nodes": [], "edges": []}})
+            return
+
+        # Discover struct type
+        type_name = str(root_val.GetTypeName() or "")
+        struct_type = type_name.replace(" *", "").replace("*", "").strip()
+
+        if not struct_type:
+            send_response({"ok": False, "error": "Could not determine struct type from variable"})
+            return
+
+        nodes, edges = _walk_tree_bfs(frame, root_addr, struct_type, left_field, right_field)
+        send_response({"ok": True, "result": {"nodes": nodes, "edges": edges}})
+
+    except Exception as e:
+        send_response({"ok": False, "error": str(e)})
+
+
+def _walk_tree_bfs(frame, root_addr: str, struct_type: str,
+                   left_field: str, right_field: str) -> tuple[list[dict], list[dict]]:
+    """BFS walk of a binary tree. Returns (nodes, edges)."""
+    from collections import deque
+
+    nodes = []
+    edges = []
+    visited = set()
+    queue = deque()
+
+    # Enqueue root with parent info
+    queue.append((root_addr, -1))  # (addr, parent_index), -1 = no parent
+
+    max_nodes = 200
+
+    while queue and len(nodes) < max_nodes:
+        addr, parent_idx = queue.popleft()
+
+        if _is_null(addr) or addr in visited:
+            continue
+
+        visited.add(addr)
+        node_idx = len(nodes)
+
+        # Read fields via typed expression
+        fields = {}
+        label = f"{struct_type}@{addr[-4:]}"
+
+        # Read 'val' field
+        val_expr = f"(({struct_type}*){addr})->val"
+        val_result = frame.EvaluateExpression(val_expr)
+        if val_result and val_result.GetError().Success():
+            val_str = str(val_result.GetValue() or "")
+            fields["val"] = val_str
+            label = f"{val_str}"
+
+        # Read left child
+        left_addr = "0x0"
+        left_expr = f"(({struct_type}*){addr})->{left_field}"
+        left_result = frame.EvaluateExpression(left_expr)
+        if left_result and left_result.GetError().Success():
+            left_addr = str(left_result.GetValue() or "0x0")
+        fields[left_field] = left_addr
+
+        # Read right child
+        right_addr = "0x0"
+        right_expr = f"(({struct_type}*){addr})->{right_field}"
+        right_result = frame.EvaluateExpression(right_expr)
+        if right_result and right_result.GetError().Success():
+            right_addr = str(right_result.GetValue() or "0x0")
+        fields[right_field] = right_addr
+
+        nodes.append({
+            "addr": addr,
+            "label": label,
+            "fields": fields,
+        })
+
+        # Record edge from parent
+        if parent_idx >= 0:
+            edges.append({
+                "from_idx": parent_idx,
+                "to_idx": node_idx,
+            })
+
+        # Enqueue children (null children are recorded as null sentinels for layout)
+        if not _is_null(left_addr):
+            queue.append((left_addr, node_idx))
+        if not _is_null(right_addr):
+            queue.append((right_addr, node_idx))
+
+    return nodes, edges
 
 
 def _is_null(addr: str) -> bool:

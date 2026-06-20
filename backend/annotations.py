@@ -31,6 +31,13 @@ _LINKED_LIST_RE = re.compile(
     r'\.next_field=(\w+)'
 )
 
+_BINARY_TREE_RE = re.compile(
+    r'@viz\s+binary_tree\((\w+)\)'
+    r'\s+root=(\w+(?:->\w+)*)'
+    r'\.left_field=(\w+)'
+    r'\.right_field=(\w+)'
+)
+
 _WATCH_RE = re.compile(
     r'@viz\s+watch\(([^)]+)\)'
 )
@@ -62,6 +69,18 @@ def parse_annotations(source_code: str) -> list[Annotation]:
                 name=m.group(1),
                 root_var=m.group(2),
                 next_field=m.group(3),
+            ))
+            continue
+
+        # Try binary_tree
+        m = _BINARY_TREE_RE.search(stripped)
+        if m:
+            annotations.append(Annotation(
+                struct_type="binary_tree",
+                name=m.group(1),
+                root_var=m.group(2),
+                left_field=m.group(3),
+                right_field=m.group(4),
             ))
             continue
 

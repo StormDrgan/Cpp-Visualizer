@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useStore } from '../store/useStore';
 import type { Annotation } from '../types';
 
-type AnnotationType = 'linked_list' | 'watch';
+type AnnotationType = 'linked_list' | 'binary_tree' | 'watch';
 
 export default function VariablePanel() {
   const snapshot = useStore((s) => s.snapshot);
@@ -18,6 +18,8 @@ export default function VariablePanel() {
   const [annName, setAnnName] = useState('');
   const [annRoot, setAnnRoot] = useState('');
   const [annNext, setAnnNext] = useState('next');
+  const [annLeft, setAnnLeft] = useState('left');
+  const [annRight, setAnnRight] = useState('right');
   const [annWatchVars, setAnnWatchVars] = useState('');
 
   const handleAddAnnotation = () => {
@@ -30,6 +32,19 @@ export default function VariablePanel() {
         name: annName.trim(),
         root_var: annRoot.trim(),
         next_field: annNext.trim() || 'next',
+        left_field: '',
+        right_field: '',
+        watched_vars: [],
+      });
+    } else if (annType === 'binary_tree') {
+      if (!annRoot.trim()) return;
+      addAnnotation({
+        struct_type: 'binary_tree',
+        name: annName.trim(),
+        root_var: annRoot.trim(),
+        next_field: '',
+        left_field: annLeft.trim() || 'left',
+        right_field: annRight.trim() || 'right',
         watched_vars: [],
       });
     } else {
@@ -40,6 +55,8 @@ export default function VariablePanel() {
         name: '',
         root_var: '',
         next_field: '',
+        left_field: '',
+        right_field: '',
         watched_vars: vars,
       });
     }
@@ -259,6 +276,11 @@ export default function VariablePanel() {
                           <span style={{ color: '#1a73e8' }}>🔗</span>
                           {' '}{ann.name}: head={ann.root_var}.next_field={ann.next_field}
                         </>
+                      ) : ann.struct_type === 'binary_tree' ? (
+                        <>
+                          <span style={{ color: '#2e7d32' }}>🌳</span>
+                          {' '}{ann.name}: root={ann.root_var} ({ann.left_field || 'left'}, {ann.right_field || 'right'})
+                        </>
                       ) : (
                         <>
                           <span style={{ color: '#e65100' }}>👁️</span>
@@ -296,6 +318,17 @@ export default function VariablePanel() {
                   🔗 链表
                 </button>
                 <button
+                  onClick={() => setAnnType('binary_tree')}
+                  style={{
+                    flex: 1, padding: '4px 0', fontSize: 11, borderRadius: 3, border: '1px solid #ddd',
+                    background: annType === 'binary_tree' ? '#e8f5e9' : '#fff',
+                    color: annType === 'binary_tree' ? '#2e7d32' : '#999',
+                    cursor: 'pointer', fontWeight: annType === 'binary_tree' ? 600 : 400,
+                  }}
+                >
+                  🌳 二叉树
+                </button>
+                <button
                   onClick={() => setAnnType('watch')}
                   style={{
                     flex: 1, padding: '4px 0', fontSize: 11, borderRadius: 3, border: '1px solid #ddd',
@@ -328,6 +361,35 @@ export default function VariablePanel() {
                     onChange={(e) => setAnnNext(e.target.value)}
                     style={inputStyle}
                   />
+                </>
+              ) : annType === 'binary_tree' ? (
+                <>
+                  <input
+                    placeholder="标注名 例如 bt"
+                    value={annName}
+                    onChange={(e) => setAnnName(e.target.value)}
+                    style={inputStyle}
+                  />
+                  <input
+                    placeholder="根变量 例如 root"
+                    value={annRoot}
+                    onChange={(e) => setAnnRoot(e.target.value)}
+                    style={inputStyle}
+                  />
+                  <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
+                    <input
+                      placeholder="left 字段"
+                      value={annLeft}
+                      onChange={(e) => setAnnLeft(e.target.value)}
+                      style={{ ...inputStyle, flex: 1, marginBottom: 0 }}
+                    />
+                    <input
+                      placeholder="right 字段"
+                      value={annRight}
+                      onChange={(e) => setAnnRight(e.target.value)}
+                      style={{ ...inputStyle, flex: 1, marginBottom: 0 }}
+                    />
+                  </div>
                 </>
               ) : (
                 <input

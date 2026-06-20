@@ -23,12 +23,21 @@ class HeapNode:
 
 
 @dataclass
+class TreeEdge:
+    """A parent-child edge in a tree structure."""
+    from_idx: int
+    to_idx: int
+    child_side: str = ""  # "left" or "right"
+
+
+@dataclass
 class TraversalResult:
     """Result of walking a data structure."""
     annotation_name: str
     structure_type: str
     root_node_addr: str
     nodes: list[HeapNode] = field(default_factory=list)
+    edges: list[TreeEdge] = field(default_factory=list)
     cycle_detected: bool = False
 
 
@@ -102,6 +111,80 @@ class MemoryWalker:
             root_node_addr=root_addr,
             nodes=nodes,
             cycle_detected=cycle,
+        )
+
+    def walk_binary_tree(
+        self,
+        annotation_name: str,
+        root_var: str,
+        left_field: str = "left",
+        right_field: str = "right",
+        watched_vars: list[str] | None = None,
+    ) -> TraversalResult:
+        """Walk a binary tree from root_var following left_field and right_field.
+
+        Uses BFS (level-order) to collect all nodes and parent-child edges.
+        """
+        if watched_vars is None:
+            watched_vars = []
+
+        resp = self._send({
+            "cmd": "walk_binary_tree",
+            "root_var": root_var,
+            "left_field": left_field,
+            "right_field": right_field,
+        })
+
+        if not resp.get("ok"):
+            return TraversalResult(
+                annotation_name=annotation_name,
+                structure_type="binary_tree",
+                root_node_addr="0x0",
+            )
+
+        result = resp.get("result", {})
+        raw_nodes = result.get("nodes", [])
+        raw_edges = result.get("edges", [])
+        root_addr = raw_nodes[0]["addr"] if raw_nodes else "0x0"
+
+        # Build HeapNode list
+        nodes = []
+        for n in raw_nodes:
+            nodes.append(HeapNode(
+                addr=n.get("addr", "0x0"),
+                label=n.get("label", ""),
+                fields=n.get("fields", {}),
+            ))
+
+        # Build TreeEdge list
+        edges = []
+        for e in raw_edges:
+            edges.append(TreeEdge(
+                from_idx=e.get("from_idx", -1),
+                to_idx=e.get("to_idx", -1),
+                child_side="",  # resolved below from field values
+            ))
+
+        # Determine child_side for each edge by checking parent's left/right fields
+        for edge in edges:
+            if edge.from_idx < len(nodes):
+                parent = nodes[edge.from_idx]
+                child_addr = nodes[edge.to_idx].addr if edge.to_idx < len(nodes) else ""
+                if parent.fields.get(left_field) == child_addr:
+                    edge.child_side = "left"
+                elif parent.fields.get(right_field) == child_addr:
+                    edge.child_side = "right"
+
+        # Match watched pointers to nodes
+        if watched_vars and nodes:
+            self._match_pointers(nodes, watched_vars)
+
+        return TraversalResult(
+            annotation_name=annotation_name,
+            structure_type="binary_tree",
+            root_node_addr=root_addr,
+            nodes=nodes,
+            edges=edges,
         )
 
     def _match_pointers(self, nodes: list[HeapNode], watched_vars: list[str]) -> None:

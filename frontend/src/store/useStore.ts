@@ -39,8 +39,16 @@ struct ListNode {
     ListNode(int x) : val(x), next(nullptr) {}
 };
 
+// @viz binary_tree(bt) root=root.left_field=left.right_field=right
+struct TreeNode {
+    int val;
+    TreeNode* left;
+    TreeNode* right;
+    TreeNode(int x) : val(x), left(nullptr), right(nullptr) {}
+};
+
 int main() {
-    // 创建链表: 1 -> 2 -> 3 -> 4
+    // ===== 链表: 1 -> 2 -> 3 -> 4 =====
     ListNode* head = new ListNode(1);
     head->next = new ListNode(2);
     head->next->next = new ListNode(3);
@@ -55,7 +63,16 @@ int main() {
         fast = fast->next->next;
     }
 
-    cout << "middle = " << slow->val << endl;
+    // ===== 二叉树: 构建搜索树 =====
+    TreeNode* root = new TreeNode(5);
+    root->left = new TreeNode(3);
+    root->right = new TreeNode(8);
+    root->left->left = new TreeNode(1);
+    root->left->right = new TreeNode(4);
+    root->right->right = new TreeNode(9);
+
+    cout << "list middle = " << slow->val << endl;
+    cout << "tree root = " << root->val << endl;
     return 0;
 }
 `;
