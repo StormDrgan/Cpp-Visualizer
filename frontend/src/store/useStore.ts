@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { StateSnapshot, CompileError, SessionStatus, DiffAction } from '../types';
+import type { StateSnapshot, CompileError, SessionStatus, DiffAction, Annotation } from '../types';
 import { api } from '../api/client';
 
 interface Store {
@@ -8,6 +8,7 @@ interface Store {
   code: string;
   snapshot: StateSnapshot | null;
   diffActions: DiffAction[];
+  annotations: Annotation[];
   breakpoints: Set<number>;
   compileErrors: CompileError[];
   error: string | null;
@@ -22,6 +23,9 @@ interface Store {
   toggleBreakpoint: (line: number) => Promise<void>;
   setCode: (code: string) => void;
   clearError: () => void;
+  addAnnotation: (ann: Annotation) => void;
+  removeAnnotation: (index: number) => void;
+  setAnnotations: (anns: Annotation[]) => void;
 }
 
 const 默认代码 = `#include <iostream>
@@ -67,6 +71,7 @@ export const useStore = create<Store>((set, get) => ({
   code: 默认代码,
   snapshot: null,
   diffActions: [],
+  annotations: [],
   breakpoints: new Set<number>(),
   compileErrors: [],
   error: null,
@@ -90,7 +95,8 @@ export const useStore = create<Store>((set, get) => ({
       }
 
       const breakpoints = Array.from(get().breakpoints);
-      const response = await api.loadCode(sessionId, code, breakpoints);
+      const annotations = get().annotations;
+      const response = await api.loadCode(sessionId, code, breakpoints, annotations as unknown[]);
 
       if (response.type === 'compile_error') {
         set({
@@ -273,4 +279,18 @@ export const useStore = create<Store>((set, get) => ({
   },
 
   clearError: () => set({ error: null, compileErrors: [] }),
+
+  addAnnotation: (ann: Annotation) => {
+    set((s) => ({ annotations: [...s.annotations, ann] }));
+  },
+
+  removeAnnotation: (index: number) => {
+    set((s) => ({
+      annotations: s.annotations.filter((_, i) => i !== index),
+    }));
+  },
+
+  setAnnotations: (anns: Annotation[]) => {
+    set({ annotations: anns });
+  },
 }));

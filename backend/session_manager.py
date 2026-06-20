@@ -8,6 +8,7 @@ Each session holds:
   - Idle timer for auto-cleanup
 """
 
+from __future__ import annotations
 import uuid
 import threading
 from dataclasses import dataclass, field

@@ -3,6 +3,7 @@
 See DESIGN.md §3.4 for the full StateSnapshot schema.
 """
 
+from __future__ import annotations
 from memory_walker import MemoryWalker, TraversalResult
 from annotations import Annotation, get_watched_vars
 

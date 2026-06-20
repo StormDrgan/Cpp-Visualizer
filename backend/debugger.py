@@ -6,6 +6,8 @@ via JSON lines over stdin/stdout. This keeps the FastAPI process independent
 of the LLDB's Python version.
 """
 
+from __future__ import annotations
+
 import json
 import os
 import subprocess

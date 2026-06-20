@@ -8,6 +8,7 @@ Usage:
     /Applications/Xcode.app/.../python3.9 lldb_bridge.py
 """
 
+from __future__ import annotations
 import json
 import sys
 import os

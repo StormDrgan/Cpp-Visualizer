@@ -8,8 +8,9 @@ The MemoryWalker doesn't talk to LLDB directly — it receives a callback
 This keeps it bridge-agnostic.
 """
 
+from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import Callable, Optional
 
 
 @dataclass

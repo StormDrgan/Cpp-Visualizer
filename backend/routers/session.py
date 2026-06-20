@@ -1,5 +1,6 @@
 """Session API routes — see DESIGN.md §3.2 for the API specification."""
 
+from __future__ import annotations
 import os
 import shutil
 
@@ -66,9 +67,28 @@ async def load_code(session_id: str, body: dict):
     session.history.clear()
     session.future.clear()
 
-    # Parse annotations from source code
-    annotations = parse_annotations(code)
-    _session_annotations[session_id] = annotations
+    # Parse annotations from source code + explicit annotations from frontend
+    code_annotations = parse_annotations(code)
+    explicit = body.get("annotations", [])
+
+    # Merge explicit annotations (from annotation management UI)
+    from dataclasses import asdict
+    for item in explicit:
+        ann = Annotation(
+            struct_type=item.get("struct_type", ""),
+            name=item.get("name", ""),
+            root_var=item.get("root_var", ""),
+            next_field=item.get("next_field", ""),
+            left_field=item.get("left_field", ""),
+            right_field=item.get("right_field", ""),
+            length_var=item.get("length_var", ""),
+            watched_vars=item.get("watched_vars", []),
+        )
+        # Avoid duplicates: skip if same name already parsed from code
+        if not any(a.name == ann.name and a.struct_type == ann.struct_type for a in code_annotations):
+            code_annotations.append(ann)
+
+    _session_annotations[session_id] = code_annotations
 
     # Create MemoryWalker (wraps the debugger's send capability)
     debugger = _debuggers[session_id]
