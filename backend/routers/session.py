@@ -124,7 +124,7 @@ async def load_code(session_id: str, body: dict):
         session.step_number = 1
         snapshot = build_snapshot(
             1, state, session.source_file,
-            annotations=annotations,
+            annotations=code_annotations,
             walker=_walkers.get(session_id),
         )
         _prev_heap_structures[session_id] = snapshot.get("heap_structures", [])
