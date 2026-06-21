@@ -245,14 +245,37 @@ class MemoryWalker:
         )
 
     def _match_pointers(self, nodes: list[HeapNode], watched_vars: list[str]) -> None:
-        """For each watched variable, find which node it points to."""
+        """For each watched variable, find which node it points to.
+
+        Two-phase matching:
+        1. Address match: evaluate the variable, treat result as hex address,
+           match against node.addr (works for pointer variables like slow, fast).
+        2. Index match: for array structures, if no address match found,
+           try matching the evaluated value against node.fields["index"]
+           (works for integer loop counters like i, j, lo, hi, mid).
+        """
         for var in watched_vars:
             resp = self._send({"cmd": "evaluate", "expression": var})
             if not resp.get("ok"):
                 continue
-            addr = resp.get("result", {}).get("value", "0x0")
-            if addr and addr not in ("0x0", "0", "nullptr", "NULL"):
-                for node in nodes:
-                    if node.addr == addr:
-                        node.pointers_pointing_here.append(var)
-                        break
+            value = resp.get("result", {}).get("value", "0x0")
+            if not value or value in ("0x0", "0", "nullptr", "NULL"):
+                continue
+
+            # Phase 1: address match (for pointer variables)
+            matched = False
+            for node in nodes:
+                if node.addr == value:
+                    node.pointers_pointing_here.append(var)
+                    matched = True
+                    break
+
+            if matched:
+                continue
+
+            # Phase 2: index match (for array index variables like i, j, lo, hi)
+            for node in nodes:
+                node_index = node.fields.get("index", "")
+                if node_index == value:
+                    node.pointers_pointing_here.append(var)
+                    break

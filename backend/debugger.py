@@ -92,6 +92,10 @@ class DebuggerController(ABC):
         ...
 
     @abstractmethod
+    def remove_breakpoint(self, line: int) -> None:
+        ...
+
+    @abstractmethod
     def run_to_breakpoint(self) -> DebuggerState:
         ...
 
@@ -189,6 +193,12 @@ class LLDBController(DebuggerController):
             self._pending_bps.append(line)
         if self._proc and self._alive:
             self._send_cmd({"cmd": "set_breakpoint", "line": line})
+
+    def remove_breakpoint(self, line: int) -> None:
+        if line in self._pending_bps:
+            self._pending_bps.remove(line)
+        if self._proc and self._alive:
+            self._send_cmd({"cmd": "remove_breakpoint", "line": line})
 
     def run_to_breakpoint(self) -> DebuggerState:
         resp = self._send_cmd({"cmd": "continue"})

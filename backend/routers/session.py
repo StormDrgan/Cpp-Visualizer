@@ -442,9 +442,8 @@ async def remove_breakpoint(session_id: str, body: dict):
     bp_set = _pending_breakpoints.get(session_id, set())
     bp_set.discard(line)
 
-    # LLDB doesn't have a simple "remove breakpoint at line" API,
-    # so we just remove it from our tracking set.
-    # The breakpoint will be cleaned up on next reset.
+    if session_id in _debuggers:
+        _debuggers[session_id].remove_breakpoint(line)
 
     return {"status": "ok", "line": line}
 

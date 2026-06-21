@@ -54,6 +54,8 @@ def handle_command(cmd: dict, ctx: dict) -> None:
             handle_evaluate(cmd, ctx)
         elif name == "set_breakpoint":
             handle_set_breakpoint(cmd, ctx)
+        elif name == "remove_breakpoint":
+            handle_remove_breakpoint(cmd, ctx)
         elif name == "walk_linked_list":
             handle_walk_linked_list(cmd, ctx)
         elif name == "walk_binary_tree":
@@ -242,6 +244,46 @@ def handle_set_breakpoint(cmd: dict, ctx: dict) -> None:
         send_response({"ok": True, "result": {"line": line, "id": bp.GetID()}})
     else:
         send_response({"ok": False, "error": f"Failed to set breakpoint at line {line}"})
+
+
+def handle_remove_breakpoint(cmd: dict, ctx: dict) -> None:
+    """Remove (delete) breakpoints at a given line in the source file."""
+    line = int(cmd.get("line", 0))
+    target = ctx.get("target")
+    source_file = ctx.get("source_file", "")
+
+    if not target:
+        send_response({"ok": False, "error": "No target"})
+        return
+
+    removed = 0
+    bp_ids_to_delete = []
+
+    for i in range(target.GetNumBreakpoints()):
+        bp = target.GetBreakpointAtIndex(i)
+        for j in range(bp.GetNumLocations()):
+            loc = bp.GetLocationAtIndex(j)
+            addr = loc.GetAddress()
+            if not addr or not addr.IsValid():
+                continue
+            le = addr.GetLineEntry()
+            if not le or not le.IsValid():
+                continue
+            if le.GetLine() == line:
+                bp_file = le.GetFileSpec()
+                if bp_file and bp_file.GetFilename() and source_file:
+                    if bp_file.GetFilename() == source_file:
+                        bp_ids_to_delete.append(bp.GetID())
+                        break
+                else:
+                    bp_ids_to_delete.append(bp.GetID())
+                    break
+
+    for bp_id in bp_ids_to_delete:
+        target.BreakpointDelete(bp_id)
+        removed += 1
+
+    send_response({"ok": True, "result": {"line": line, "removed": removed}})
 
 
 def handle_walk_linked_list(cmd: dict, ctx: dict) -> None:

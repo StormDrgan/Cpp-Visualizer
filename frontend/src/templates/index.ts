@@ -303,6 +303,190 @@ int main() {
       },
     ],
   },
+  {
+    id: 'bst_insert',
+    label: 'BST 插入构建',
+    icon: '🌳',
+    description: '逐个插入节点构建二叉搜索树',
+    code: `#include <iostream>
+using namespace std;
+
+// @viz binary_tree(T) root=root.left_field=left.right_field=right
+// @viz watch(root, curr)
+struct TreeNode {
+    int val;
+    TreeNode* left;
+    TreeNode* right;
+    TreeNode(int x) : val(x), left(nullptr), right(nullptr) {}
+};
+
+TreeNode* insert(TreeNode* root, int val) {
+    if (!root) return new TreeNode(val);
+    if (val < root->val)
+        root->left = insert(root->left, val);
+    else
+        root->right = insert(root->right, val);
+    return root;
+}
+
+int main() {
+    TreeNode* root = nullptr;
+    int vals[] = {5, 3, 8, 1, 4, 9, 7};
+    int n = 7;
+
+    // 逐个插入构建 BST
+    for (int i = 0; i < n; i++) {
+        root = insert(root, vals[i]);
+    }
+
+    if (root)
+        cout << "root = " << root->val << endl;
+    return 0;
+}
+`,
+    annotations: [
+      {
+        struct_type: 'binary_tree',
+        name: 'T',
+        root_var: 'root',
+        next_field: '',
+        left_field: 'left',
+        right_field: 'right',
+        watched_vars: [],
+      },
+      {
+        struct_type: 'watch',
+        name: '',
+        root_var: '',
+        next_field: '',
+        left_field: '',
+        right_field: '',
+        watched_vars: ['root'],
+      },
+    ],
+  },
+  {
+    id: 'linked_list_cycle',
+    label: '链表环检测',
+    icon: '🔗',
+    description: 'Floyd 判圈算法（快慢指针检测环）',
+    code: `#include <iostream>
+using namespace std;
+
+// @viz linked_list(L) head=head.next_field=next
+// @viz watch(slow, fast)
+struct ListNode {
+    int val;
+    ListNode* next;
+    ListNode(int x) : val(x), next(nullptr) {}
+};
+
+int main() {
+    // 构建带环链表: 1 -> 2 -> 3 -> 4 -> 5 -> 6
+    //                         ^              |
+    //                         \\______________/
+    ListNode* head = new ListNode(1);
+    head->next = new ListNode(2);
+    head->next->next = new ListNode(3);
+    head->next->next->next = new ListNode(4);
+    head->next->next->next->next = new ListNode(5);
+    head->next->next->next->next->next = new ListNode(6);
+
+    // 制造环: 6 指向 3
+    head->next->next->next->next->next->next = head->next->next;
+
+    // Floyd 判圈
+    ListNode* slow = head;
+    ListNode* fast = head;
+    bool hasCycle = false;
+
+    while (fast && fast->next) {
+        slow = slow->next;
+        fast = fast->next->next;
+        if (slow == fast) {
+            hasCycle = true;
+            break;
+        }
+    }
+
+    cout << (hasCycle ? "cycle detected" : "no cycle") << endl;
+    return 0;
+}
+`,
+    annotations: [
+      {
+        struct_type: 'linked_list',
+        name: 'L',
+        root_var: 'head',
+        next_field: 'next',
+        left_field: '',
+        right_field: '',
+        watched_vars: [],
+      },
+      {
+        struct_type: 'watch',
+        name: '',
+        root_var: '',
+        next_field: '',
+        left_field: '',
+        right_field: '',
+        watched_vars: ['slow', 'fast'],
+      },
+    ],
+  },
+  {
+    id: 'selection_sort',
+    label: '选择排序',
+    icon: '📊',
+    description: '选择排序（每次选出最小元素放到前面）',
+    code: `#include <iostream>
+using namespace std;
+
+// @viz array(A) var=arr.length_var=n
+// @viz watch(i, j, minIdx)
+int main() {
+    int arr[] = {5, 2, 8, 1, 9, 3, 7, 6};
+    int n = 8;
+
+    // 选择排序
+    for (int i = 0; i < n - 1; i++) {
+        int minIdx = i;
+        for (int j = i + 1; j < n; j++) {
+            if (arr[j] < arr[minIdx]) {
+                minIdx = j;
+            }
+        }
+        int tmp = arr[i];
+        arr[i] = arr[minIdx];
+        arr[minIdx] = tmp;
+    }
+
+    cout << "sorted" << endl;
+    return 0;
+}
+`,
+    annotations: [
+      {
+        struct_type: 'array',
+        name: 'A',
+        root_var: 'arr',
+        next_field: '',
+        left_field: '',
+        right_field: '',
+        length_var: 'n',
+        watched_vars: [],
+      },
+      {
+        struct_type: 'watch',
+        name: '',
+        root_var: '',
+        next_field: '',
+        left_field: '',
+        right_field: '',
+        watched_vars: ['i', 'j', 'minIdx'],
+      },
+    ],
+  },
 ];
 
 /** 默认模板 ID */
