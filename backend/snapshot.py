@@ -87,7 +87,8 @@ def _build_heap_structures(
 
     # Check if user provided any struct-type annotations
     has_struct = any(
-        ann.struct_type in ("linked_list", "binary_tree", "array")
+        ann.struct_type in ("linked_list", "binary_tree", "array",
+                            "stack", "queue", "heap", "graph", "hashmap")
         for ann in all_annotations
     )
 
@@ -124,6 +125,70 @@ def _build_heap_structures(
                 annotation_name=ann.name,
                 root_var=ann.root_var,
                 length_var=ann.length_var,
+                watched_vars=watched,
+            )
+            structures.append(_traversal_to_dict(result))
+        elif ann.struct_type == "stack":
+            # Sequential stack: reuse array walker; linked stack: reuse linked_list walker
+            if ann.next_field:
+                # Linked stack (pointer-based)
+                result = walker.walk_linked_list(
+                    annotation_name=ann.name,
+                    root_var=ann.root_var,
+                    next_field=ann.next_field,
+                    watched_vars=watched,
+                )
+            else:
+                # Sequential stack (array-based)
+                result = walker.walk_array(
+                    annotation_name=ann.name,
+                    root_var=ann.root_var,
+                    length_var=ann.top_var,  # top index determines visible elements
+                    watched_vars=watched,
+                )
+            structures.append(_traversal_to_dict(result))
+        elif ann.struct_type == "queue":
+            # Circular queue: reuse array; linked queue: reuse linked_list
+            if ann.next_field:
+                # Linked queue (pointer-based)
+                result = walker.walk_linked_list(
+                    annotation_name=ann.name,
+                    root_var=ann.root_var,
+                    next_field=ann.next_field,
+                    watched_vars=watched,
+                )
+            else:
+                # Circular queue (array-based) — walk full capacity
+                result = walker.walk_array(
+                    annotation_name=ann.name,
+                    root_var=ann.root_var,
+                    length_var=ann.length_var or ann.rear_var,
+                    watched_vars=watched,
+                )
+            structures.append(_traversal_to_dict(result))
+        elif ann.struct_type == "heap":
+            # Binary heap (array-based) — walk the array, render as tree
+            result = walker.walk_array(
+                annotation_name=ann.name,
+                root_var=ann.root_var,
+                length_var=ann.length_var,
+                watched_vars=watched,
+            )
+            structures.append(_traversal_to_dict(result))
+        elif ann.struct_type == "graph":
+            result = walker.walk_graph(
+                annotation_name=ann.name,
+                root_var=ann.root_var,
+                mode=ann.mode or "adjlist",
+                size_var=ann.length_var,
+                watched_vars=watched,
+            )
+            structures.append(_traversal_to_dict(result))
+        elif ann.struct_type == "hashmap":
+            result = walker.walk_hashmap(
+                annotation_name=ann.name,
+                root_var=ann.root_var,
+                mode=ann.mode or "chaining",
                 watched_vars=watched,
             )
             structures.append(_traversal_to_dict(result))

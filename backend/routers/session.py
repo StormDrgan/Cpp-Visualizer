@@ -83,6 +83,10 @@ async def load_code(session_id: str, body: dict):
             left_field=item.get("left_field", ""),
             right_field=item.get("right_field", ""),
             length_var=item.get("length_var", ""),
+            top_var=item.get("top_var", ""),
+            front_var=item.get("front_var", ""),
+            rear_var=item.get("rear_var", ""),
+            mode=item.get("mode", ""),
             watched_vars=item.get("watched_vars", []),
         )
         # Avoid duplicates: skip if same name already parsed from code

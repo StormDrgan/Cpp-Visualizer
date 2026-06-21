@@ -14,13 +14,18 @@ from dataclasses import dataclass, field
 @dataclass
 class Annotation:
     """A single parsed @viz annotation."""
-    struct_type: str           # "linked_list", "binary_tree", "array", "graph", "watch"
+    struct_type: str           # "linked_list", "binary_tree", "array", "stack",
+                               # "queue", "heap", "graph", "hashmap", "watch"
     name: str                  # user-given name for this structure
     root_var: str = ""         # root pointer variable
     next_field: str = ""       # field name for the "next" pointer
     left_field: str = ""       # for binary_tree
     right_field: str = ""      # for binary_tree
-    length_var: str = ""       # for array
+    length_var: str = ""       # for array, heap capacity, hashmap bucket count
+    top_var: str = ""          # for stack — index variable tracking the top
+    front_var: str = ""        # for queue — index variable tracking the front
+    rear_var: str = ""         # for queue — index variable tracking the rear
+    mode: str = ""             # for hashmap: "chaining" (default) or "open_addressing"
     watched_vars: list[str] = field(default_factory=list)  # for "watch"
 
 
@@ -42,6 +47,56 @@ _ARRAY_RE = re.compile(
     r'@viz\s+array\((\w+)\)'
     r'\s+var=(\w+(?:->\w+)*)'
     r'\.length_var=(\w+)'
+)
+
+_STACK_RE = re.compile(
+    r'@viz\s+stack\((\w+)\)'
+    r'\s+var=(\w+(?:->\w+)*)'
+    r'\.top_var=(\w+)'
+)
+
+_STACK_LINKED_RE = re.compile(
+    r'@viz\s+stack\((\w+)\)'
+    r'\s+var=(\w+(?:->\w+)*)'
+    r'\.next_field=(\w+)'
+)
+
+_QUEUE_CIRCULAR_RE = re.compile(
+    r'@viz\s+queue\((\w+)\)'
+    r'\s+var=(\w+(?:->\w+)*)'
+    r'\.front_var=(\w+)'
+    r'\.rear_var=(\w+)'
+)
+
+_QUEUE_LINKED_RE = re.compile(
+    r'@viz\s+queue\((\w+)\)'
+    r'\s+var=(\w+(?:->\w+)*)'
+    r'\.next_field=(\w+)'
+)
+
+_HEAP_RE = re.compile(
+    r'@viz\s+heap\((\w+)\)'
+    r'\s+var=(\w+(?:->\w+)*)'
+    r'(?:\.length_var=(\w+))?'
+)
+
+_GRAPH_MATRIX_RE = re.compile(
+    r'@viz\s+graph\((\w+)\)'
+    r'\s+var=(\w+(?:->\w+)*)'
+    r'\.mode=matrix'
+    r'(?:\.size_var=(\w+))?'
+)
+
+_GRAPH_ADJLIST_RE = re.compile(
+    r'@viz\s+graph\((\w+)\)'
+    r'\s+var=(\w+(?:->\w+)*)'
+    r'(?:\.size_var=(\w+))?'
+)
+
+_HASHMAP_RE = re.compile(
+    r'@viz\s+hashmap\((\w+)\)'
+    r'\s+var=(\w+(?:->\w+)*)'
+    r'(?:\.mode=(\w+))?'
 )
 
 _WATCH_RE = re.compile(
@@ -98,6 +153,97 @@ def parse_annotations(source_code: str) -> list[Annotation]:
                 name=m.group(1),
                 root_var=m.group(2),
                 length_var=m.group(3),
+            ))
+            continue
+
+        # Try stack (sequential — array-based)
+        m = _STACK_RE.search(stripped)
+        if m:
+            annotations.append(Annotation(
+                struct_type="stack",
+                name=m.group(1),
+                root_var=m.group(2),
+                top_var=m.group(3),
+            ))
+            continue
+
+        # Try stack (linked — pointer-based)
+        m = _STACK_LINKED_RE.search(stripped)
+        if m:
+            annotations.append(Annotation(
+                struct_type="stack",
+                name=m.group(1),
+                root_var=m.group(2),
+                next_field=m.group(3),
+            ))
+            continue
+
+        # Try queue (circular — array-based)
+        m = _QUEUE_CIRCULAR_RE.search(stripped)
+        if m:
+            annotations.append(Annotation(
+                struct_type="queue",
+                name=m.group(1),
+                root_var=m.group(2),
+                front_var=m.group(3),
+                rear_var=m.group(4),
+            ))
+            continue
+
+        # Try queue (linked — pointer-based)
+        m = _QUEUE_LINKED_RE.search(stripped)
+        if m:
+            annotations.append(Annotation(
+                struct_type="queue",
+                name=m.group(1),
+                root_var=m.group(2),
+                next_field=m.group(3),
+            ))
+            continue
+
+        # Try heap (binary heap, array-based)
+        m = _HEAP_RE.search(stripped)
+        if m:
+            annotations.append(Annotation(
+                struct_type="heap",
+                name=m.group(1),
+                root_var=m.group(2),
+                length_var=m.group(3) or "",
+            ))
+            continue
+
+        # Try graph (adjacency matrix)
+        m = _GRAPH_MATRIX_RE.search(stripped)
+        if m:
+            annotations.append(Annotation(
+                struct_type="graph",
+                name=m.group(1),
+                root_var=m.group(2),
+                mode="matrix",
+                length_var=m.group(3) or "",
+            ))
+            continue
+
+        # Try graph (adjacency list)
+        m = _GRAPH_ADJLIST_RE.search(stripped)
+        if m:
+            annotations.append(Annotation(
+                struct_type="graph",
+                name=m.group(1),
+                root_var=m.group(2),
+                mode="adjlist",
+                length_var=m.group(3) or "",
+            ))
+            continue
+
+        # Try hashmap
+        m = _HASHMAP_RE.search(stripped)
+        if m:
+            annotations.append(Annotation(
+                struct_type="hashmap",
+                name=m.group(1),
+                root_var=m.group(2),
+                mode=m.group(3) or "chaining",
             ))
             continue
 

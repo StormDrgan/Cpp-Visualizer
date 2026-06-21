@@ -62,6 +62,10 @@ def handle_command(cmd: dict, ctx: dict) -> None:
             handle_walk_binary_tree(cmd, ctx)
         elif name == "walk_array":
             handle_walk_array(cmd, ctx)
+        elif name == "walk_graph":
+            handle_walk_graph(cmd, ctx)
+        elif name == "walk_hashmap":
+            handle_walk_hashmap(cmd, ctx)
         elif name == "inspect_type":
             handle_inspect_type(cmd, ctx)
         elif name == "terminate":
@@ -781,6 +785,358 @@ def _build_state(process: lldb.SBProcess, source_file: str, is_terminated: bool 
         "is_terminated": False,
         "exit_code": None,
     }
+
+
+def handle_walk_graph(cmd: dict, ctx: dict) -> None:
+    """Walk a graph structure — adjacency matrix or adjacency list.
+
+    Command: {
+        "cmd": "walk_graph",
+        "root_var": "mat" or "adj_list",
+        "mode": "matrix" | "adjlist",
+        "size_var": "n"  // variable holding vertex count
+    }
+    """
+    root_var = cmd.get("root_var", "")
+    mode = cmd.get("mode", "adjlist")
+    size_var = cmd.get("size_var", "")
+    process = ctx.get("process")
+
+    if not process or not ctx.get("alive"):
+        send_response({"ok": False, "error": "No process running"})
+        return
+
+    thread = _get_thread(process)
+    if not thread:
+        send_response({"ok": False, "error": "No thread"})
+        return
+
+    frame = thread.GetFrameAtIndex(0)
+    if not frame or not frame.IsValid():
+        send_response({"ok": False, "error": "No valid frame"})
+        return
+
+    if not root_var:
+        send_response({"ok": False, "error": "No root_var provided"})
+        return
+
+    try:
+        # Resolve vertex count
+        N = 0
+        if size_var:
+            size_result = frame.EvaluateExpression(size_var)
+            if size_result and size_result.GetError().Success():
+                try:
+                    N = int(str(size_result.GetValue() or "0"))
+                except ValueError:
+                    N = 0
+
+        if N <= 0:
+            # Try to infer from array size
+            N = 5  # default
+
+        max_vertices = min(N, 30)
+
+        if mode == "matrix":
+            nodes, edges = _walk_adjacency_matrix(frame, root_var, max_vertices)
+        else:
+            nodes, edges = _walk_adjacency_list(frame, root_var, max_vertices)
+
+        send_response({"ok": True, "result": {"nodes": nodes, "edges": edges}})
+
+    except Exception as e:
+        send_response({"ok": False, "error": str(e)})
+
+
+def _walk_adjacency_matrix(frame, mat_var: str, n: int) -> tuple[list[dict], list[dict]]:
+    """Walk a 2D adjacency matrix."""
+    nodes = []
+    edges = []
+
+    for i in range(n):
+        nodes.append({
+            "addr": f"vertex_{i}",
+            "label": str(i),
+            "fields": {"vertex_id": str(i)},
+        })
+
+    for i in range(n):
+        for j in range(n):
+            expr = f"{mat_var}[{i}][{j}]"
+            result = frame.EvaluateExpression(expr)
+            if result and result.GetError().Success():
+                val_str = str(result.GetValue() or "0")
+                try:
+                    val = int(val_str)
+                except ValueError:
+                    val = 0
+                if val != 0:
+                    edges.append({
+                        "from_idx": i,
+                        "to_idx": j,
+                    })
+
+    return nodes, edges
+
+
+def _walk_adjacency_list(frame, adj_var: str, n: int) -> tuple[list[dict], list[dict]]:
+    """Walk an adjacency list (array of linked lists).
+
+    Each adj[i] is a linked list where each node has fields like 'val' (vertex id)
+    and 'next' (pointer to next edge node).
+    """
+    nodes = []
+    edges = []
+
+    for i in range(n):
+        nodes.append({
+            "addr": f"vertex_{i}",
+            "label": str(i),
+            "fields": {"vertex_id": str(i)},
+        })
+
+    for i in range(n):
+        # Walk the linked list at adj[i]
+        cur_addr_expr = f"{adj_var}[{i}]"
+        cur_result = frame.EvaluateExpression(cur_addr_expr)
+        if not cur_result or cur_result.GetError().Fail():
+            continue
+
+        cur_addr = str(cur_result.GetValue() or "0x0")
+        if _is_null(cur_addr):
+            continue
+
+        # Walk the chain
+        step = 0
+        max_steps = 50
+        visited = set()
+
+        while not _is_null(cur_addr) and step < max_steps:
+            if cur_addr in visited:
+                break
+            visited.add(cur_addr)
+
+            # Read 'val' (neighbor vertex id)
+            val_expr = f"*((int*)({cur_addr}))"
+            val_result = frame.EvaluateExpression(val_expr)
+            if val_result and val_result.GetError().Success():
+                try:
+                    neighbor = int(str(val_result.GetValue() or "-1"))
+                except ValueError:
+                    neighbor = -1
+                if 0 <= neighbor < n:
+                    edges.append({
+                        "from_idx": i,
+                        "to_idx": neighbor,
+                    })
+
+            # Move to next
+            next_expr = f"*((unsigned long long*)({cur_addr} + 8))"
+            next_result = frame.EvaluateExpression(next_expr)
+            if next_result and next_result.GetError().Success():
+                cur_addr = str(next_result.GetValue() or "0x0")
+            else:
+                break
+
+            step += 1
+
+    return nodes, edges
+
+
+def handle_walk_hashmap(cmd: dict, ctx: dict) -> None:
+    """Walk a hash table structure.
+
+    Command: {
+        "cmd": "walk_hashmap",
+        "root_var": "table",
+        "mode": "chaining" | "open_addressing"
+    }
+
+    For chaining mode: table is an array of linked list head pointers.
+    For open addressing: table is an array of key-value entries.
+    """
+    root_var = cmd.get("root_var", "")
+    mode = cmd.get("mode", "chaining")
+    process = ctx.get("process")
+
+    if not process or not ctx.get("alive"):
+        send_response({"ok": False, "error": "No process running"})
+        return
+
+    thread = _get_thread(process)
+    if not thread:
+        send_response({"ok": False, "error": "No thread"})
+        return
+
+    frame = thread.GetFrameAtIndex(0)
+    if not frame or not frame.IsValid():
+        send_response({"ok": False, "error": "No valid frame"})
+        return
+
+    if not root_var:
+        send_response({"ok": False, "error": "No root_var provided"})
+        return
+
+    try:
+        if mode == "chaining":
+            nodes, edges = _walk_hashmap_chaining(frame, root_var)
+        else:
+            nodes, edges = _walk_hashmap_open_addressing(frame, root_var)
+
+        send_response({"ok": True, "result": {"nodes": nodes, "edges": edges}})
+
+    except Exception as e:
+        send_response({"ok": False, "error": str(e)})
+
+
+def _walk_hashmap_chaining(frame, table_var: str) -> tuple[list[dict], list[dict]]:
+    """Walk a hash table with separate chaining.
+
+    Table is an array of linked list head pointers.
+    Each node has 'key', 'val', and 'next' fields.
+    """
+    nodes = []
+    edges = []
+
+    # Determine table size — evaluate the array length
+    N = 7  # default bucket count
+    # Try to count buckets by evaluating table_var
+    size_result = frame.EvaluateExpression(f"(sizeof({table_var}) / sizeof({table_var}[0]))")
+    if size_result and size_result.GetError().Success():
+        try:
+            N = int(str(size_result.GetValue() or "7"))
+        except ValueError:
+            N = 7
+
+    max_buckets = min(N, 20)
+
+    for i in range(max_buckets):
+        # Create bucket node
+        bucket_addr = f"bucket_{i}"
+        nodes.append({
+            "addr": bucket_addr,
+            "label": "∅",  # empty by default
+            "fields": {"bucket_idx": str(i)},
+        })
+
+        # Try to walk chain from bucket i
+        head_expr = f"{table_var}[{i}]"
+        head_result = frame.EvaluateExpression(head_expr)
+        if not head_result or head_result.GetError().Fail():
+            continue
+
+        head_addr = str(head_result.GetValue() or "0x0")
+        if _is_null(head_addr):
+            continue
+
+        # Walk the chain
+        cur_addr = head_addr
+        step = 0
+        max_steps = 30
+        visited = set()
+        prev_node_idx = len(nodes) - 1  # bucket node index
+
+        while not _is_null(cur_addr) and step < max_steps:
+            if cur_addr in visited:
+                break
+            visited.add(cur_addr)
+
+            # Read key and value fields
+            key_expr = f"*((int*)({cur_addr}))"
+            key_result = frame.EvaluateExpression(key_expr)
+            key_str = "?"
+            if key_result and key_result.GetError().Success():
+                key_str = str(key_result.GetValue() or "?")
+
+            val_expr = f"*((int*)({cur_addr} + 4))"
+            val_result = frame.EvaluateExpression(val_expr)
+            val_str = "?"
+            if val_result and val_result.GetError().Success():
+                val_str = str(val_result.GetValue() or "?")
+
+            cur_node_idx = len(nodes)
+            nodes.append({
+                "addr": cur_addr,
+                "label": f"{key_str}→{val_str}",
+                "fields": {"key": key_str, "val": val_str},
+            })
+
+            edges.append({
+                "from_idx": prev_node_idx,
+                "to_idx": cur_node_idx,
+            })
+            prev_node_idx = cur_node_idx
+
+            # Update bucket label to show first entry
+            if step == 0:
+                nodes[i]["label"] = f"{key_str}→{val_str}"
+
+            # Next
+            next_expr = f"*((unsigned long long*)({cur_addr} + 8))"
+            next_result = frame.EvaluateExpression(next_expr)
+            if next_result and next_result.GetError().Success():
+                cur_addr = str(next_result.GetValue() or "0x0")
+            else:
+                break
+
+            step += 1
+
+    return nodes, edges
+
+
+def _walk_hashmap_open_addressing(frame, table_var: str) -> tuple[list[dict], list[dict]]:
+    """Walk a hash table with open addressing (linear probing).
+
+    Table is an array of entries, each with key, val, and a state flag.
+    """
+    nodes = []
+    edges = []
+
+    N = 7
+    size_result = frame.EvaluateExpression(f"(sizeof({table_var}) / sizeof({table_var}[0]))")
+    if size_result and size_result.GetError().Success():
+        try:
+            N = int(str(size_result.GetValue() or "7"))
+        except ValueError:
+            N = 7
+
+    max_slots = min(N, 20)
+
+    for i in range(max_slots):
+        slot_expr = f"{table_var}[{i}]"
+        slot_result = frame.EvaluateExpression(slot_expr)
+
+        key_str = "∅"
+        val_str = ""
+        is_empty = True
+
+        if slot_result and slot_result.GetError().Success():
+            # Try to read .key field
+            key_expr = f"{table_var}[{i}].key"
+            key_result = frame.EvaluateExpression(key_expr)
+            if key_result and key_result.GetError().Success():
+                k = str(key_result.GetValue() or "")
+                if k and k != "0":
+                    key_str = k
+                    is_empty = False
+
+            if not is_empty:
+                val_expr = f"{table_var}[{i}].val"
+                val_result = frame.EvaluateExpression(val_expr)
+                if val_result and val_result.GetError().Success():
+                    val_str = str(val_result.GetValue() or "")
+
+        label = f"k:{key_str}" if not is_empty else "∅"
+        if val_str:
+            label += f" v:{val_str}"
+
+        nodes.append({
+            "addr": f"slot_{i}",
+            "label": label,
+            "fields": {"slot_idx": str(i), "key": key_str, "val": val_str, "empty": str(is_empty).lower()},
+        })
+
+    return nodes, edges
 
 
 def handle_inspect_type(cmd: dict, ctx: dict) -> None:

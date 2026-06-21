@@ -127,6 +127,10 @@ async def _handle_load(session_id: str, ws: WebSocket, payload: dict) -> None:
             left_field=item.get("left_field", ""),
             right_field=item.get("right_field", ""),
             length_var=item.get("length_var", ""),
+            top_var=item.get("top_var", ""),
+            front_var=item.get("front_var", ""),
+            rear_var=item.get("rear_var", ""),
+            mode=item.get("mode", ""),
             watched_vars=item.get("watched_vars", []),
         )
         if not any(a.name == ann.name and a.struct_type == ann.struct_type for a in code_annotations):

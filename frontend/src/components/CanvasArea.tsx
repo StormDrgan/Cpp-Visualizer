@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useMemo, useCallback } from 'react';
+import { useRef, useEffect, useState, useMemo, useCallback, Fragment } from 'react';
 import { Stage, Layer, Rect, Text, Arrow, Group, Line, Circle } from 'react-konva';
 import Konva from 'konva';
 import { useStore } from '../store/useStore';
@@ -22,6 +22,28 @@ const ARRAY_CELL_W = 72;
 const ARRAY_CELL_H = 40;
 const ARRAY_GAP = 4;
 const ARRAY_START_Y = 130;
+
+// Stack layout constants
+const STACK_CELL_W = 88;
+const STACK_CELL_H = 36;
+const STACK_START_X = 100;
+const STACK_START_Y = 36;
+const STACK_GAP = 3;
+
+// Queue layout constants
+const QUEUE_CELL_W = 72;
+const QUEUE_CELL_H = 40;
+
+// Graph layout constants
+const GRAPH_NODE_RADIUS = 22;
+const GRAPH_CENTER_X = 300;
+const GRAPH_CENTER_Y = 200;
+const GRAPH_RADIUS = 140;
+
+// Hashmap layout constants
+const HMAP_BUCKET_W = 88;
+const HMAP_BUCKET_H = 40;
+const HMAP_CHAIN_GAP = 60;
 
 // ---- Content bounds type ----
 interface ContentBounds {
@@ -168,6 +190,82 @@ function getArrayLayout(
   return { positions, startX, bounds };
 }
 
+// ---- Sequential stack layout helper ----
+interface StackLayout {
+  positions: Record<string, { x: number; y: number; cx: number; cy: number }>;
+  bounds: ContentBounds;
+}
+
+function getStackLayout(
+  struct: HeapStructure,
+  canvasSize: { w: number; h: number },
+): StackLayout | null {
+  const nodes = struct.nodes;
+  if (nodes.length === 0) return null;
+
+  const startX = STACK_START_X;
+  const positions: Record<string, { x: number; y: number; cx: number; cy: number }> = {};
+
+  // Stack grows downward — index 0 at bottom, top at... well, top
+  nodes.forEach((node, i) => {
+    const x = startX;
+    const y = STACK_START_Y + i * (STACK_CELL_H + STACK_GAP);
+    positions[node.addr] = { x, y, cx: x + STACK_CELL_W / 2, cy: y + STACK_CELL_H / 2 };
+  });
+
+  let maxPtrs = 0;
+  for (const n of nodes) maxPtrs = Math.max(maxPtrs, n.pointers_pointing_here.length);
+  const rightExtra = maxPtrs > 0 ? 60 + maxPtrs * 20 : 8;
+
+  const bounds: ContentBounds = {
+    minX: startX - CONTENT_MARGIN,
+    maxX: startX + STACK_CELL_W + rightExtra,
+    minY: STACK_START_Y - 36,
+    maxY: STACK_START_Y + nodes.length * (STACK_CELL_H + STACK_GAP) + 40,
+  };
+
+  return { positions, bounds };
+}
+
+// ---- Queue (circular array) layout helper ----
+interface QueueLayout {
+  positions: Record<string, { x: number; y: number; cx: number; cy: number }>;
+  startX: number;
+  bounds: ContentBounds;
+}
+
+function getQueueLayout(
+  struct: HeapStructure,
+  canvasSize: { w: number; h: number },
+): QueueLayout | null {
+  const nodes = struct.nodes;
+  if (nodes.length === 0) return null;
+
+  const totalWidth = nodes.length * QUEUE_CELL_W + (nodes.length - 1) * ARRAY_GAP;
+  const startX = Math.max(START_X, (canvasSize.w - totalWidth) / 2);
+  const startY = CENTER_Y - QUEUE_CELL_H / 2;
+
+  const positions: Record<string, { x: number; y: number; cx: number; cy: number }> = {};
+  nodes.forEach((node, i) => {
+    const x = startX + i * (QUEUE_CELL_W + ARRAY_GAP);
+    const y = startY;
+    positions[node.addr] = { x, y, cx: x + QUEUE_CELL_W / 2, cy: y + QUEUE_CELL_H / 2 };
+  });
+
+  let maxPtrs = 0;
+  for (const n of nodes) maxPtrs = Math.max(maxPtrs, n.pointers_pointing_here.length);
+  const bottomExtra = maxPtrs > 0 ? 14 + maxPtrs * 20 : 8;
+
+  const bounds: ContentBounds = {
+    minX: startX - CONTENT_MARGIN,
+    maxX: startX + totalWidth + CONTENT_MARGIN,
+    minY: startY - 48,
+    maxY: startY + QUEUE_CELL_H + 24 + bottomExtra,
+  };
+
+  return { positions, startX, bounds };
+}
+
 // ---- Merge bounds ----
 function mergeBounds(all: ContentBounds[]): ContentBounds {
   if (all.length === 0) return { minX: 0, maxX: 100, minY: 0, maxY: 100 };
@@ -206,12 +304,38 @@ export default function CanvasArea() {
     // doesn't artificially constrain long lists
     const layoutCanvas = { w: Math.max(viewport.w, 2000), h: Math.max(viewport.h, 1200) };
     for (const struct of structures) {
-      if (struct.structure_type === 'binary_tree') {
+      if (struct.structure_type === 'binary_tree' || struct.structure_type === 'heap') {
         const layout = getBinaryTreeLayout(struct, layoutCanvas);
         if (layout) all.push(layout.bounds);
       } else if (struct.structure_type === 'array') {
         const layout = getArrayLayout(struct, layoutCanvas);
         if (layout) all.push(layout.bounds);
+      } else if (struct.structure_type === 'stack' && !struct.nodes.some(n => (n.fields as Record<string, string>)?.next)) {
+        // Sequential stack (array-based, no next field)
+        const layout = getStackLayout(struct, layoutCanvas);
+        if (layout) all.push(layout.bounds);
+      } else if (struct.structure_type === 'queue' && !struct.nodes.some(n => (n.fields as Record<string, string>)?.next)) {
+        // Circular queue (array-based, no next field)
+        const layout = getQueueLayout(struct, layoutCanvas);
+        if (layout) all.push(layout.bounds);
+      } else if (struct.structure_type === 'queue' || struct.structure_type === 'stack') {
+        // Linked stack/queue — reuse linked list layout
+        const layout = getLinkedListLayout(struct, layoutCanvas);
+        if (layout) all.push(layout.bounds);
+      } else if (struct.structure_type === 'graph') {
+        // Graph: rough estimate based on node count
+        const nodeCount = struct.nodes.length;
+        all.push({
+          minX: 20, maxX: 20 + nodeCount * 100 + 100,
+          minY: 20, maxY: 20 + nodeCount * 70 + 100,
+        });
+      } else if (struct.structure_type === 'hashmap') {
+        // Hashmap: array of buckets + chains
+        const nodeCount = struct.nodes.length;
+        all.push({
+          minX: 20, maxX: 20 + nodeCount * (HMAP_BUCKET_W + 8) + HMAP_CHAIN_GAP * 3 + 100,
+          minY: 20, maxY: 20 + 200 + 100,
+        });
       } else {
         const layout = getLinkedListLayout(struct, layoutCanvas);
         if (layout) all.push(layout.bounds);
@@ -491,6 +615,11 @@ export default function CanvasArea() {
           {structures.map((struct) => {
             if (struct.structure_type === 'binary_tree') return renderBinaryTree(struct, stageSize);
             if (struct.structure_type === 'array') return renderArray(struct, stageSize);
+            if (struct.structure_type === 'stack') return renderStack(struct, stageSize);
+            if (struct.structure_type === 'queue') return renderQueue(struct, stageSize);
+            if (struct.structure_type === 'heap') return renderHeap(struct, stageSize);
+            if (struct.structure_type === 'graph') return renderGraph(struct, stageSize);
+            if (struct.structure_type === 'hashmap') return renderHashmap(struct, stageSize);
             return renderLinkedList(struct, stageSize);
           })}
         </Layer>
@@ -755,6 +884,787 @@ function renderArray(
 function shortAddr(addr: string): string {
   if (!addr || addr === '0x0') return 'nullptr';
   return '…' + addr.slice(-4);
+}
+
+// ---- Stack rendering (sequential + linked) ----
+
+function renderStack(
+  struct: HeapStructure,
+  canvasSize: { w: number; h: number },
+) {
+  // Linked stack? Check if nodes have 'next' field (pointer-based)
+  const isLinked = struct.nodes.length > 0 &&
+    typeof (struct.nodes[0].fields as Record<string, string>)?.next === 'string';
+
+  if (isLinked) {
+    return renderLinkedStack(struct, canvasSize);
+  }
+  return renderSequentialStack(struct, canvasSize);
+}
+
+function renderSequentialStack(
+  struct: HeapStructure,
+  canvasSize: { w: number; h: number },
+) {
+  const layout = getStackLayout(struct, canvasSize);
+  if (!layout) {
+    return (
+      <Group key={`${struct.annotation_name}-empty`} x={canvasSize.w / 2 - 40} y={canvasSize.h / 2 - 20}>
+        <Rect width={80} height={40} cornerRadius={4} fill="#f5f5f5" stroke="#ccc" strokeWidth={1} />
+        <Text text="EMPTY" x={0} y={0} width={80} height={40} align="center" verticalAlign="middle" fontSize={12} fill="#999" fontStyle="bold" />
+        <Text text={struct.annotation_name} x={40} y={45} fontSize={11} fill="#bbb" align="center" />
+      </Group>
+    );
+  }
+
+  const { positions } = layout;
+  const { nodes } = struct;
+  const elements: React.ReactNode[] = [];
+
+  // Draw cells from bottom to top (index 0 at bottom)
+  nodes.forEach((node, i) => {
+    const { x, y, cx } = positions[node.addr];
+    const hasPointers = node.pointers_pointing_here.length > 0;
+
+    // Stack plate (wider plate look)
+    elements.push(
+      <Group key={`stack-node-${node.addr}`} name={`node-${node.addr}`}>
+        <Rect
+          name={`rect-${node.addr}`}
+          x={x} y={y}
+          width={STACK_CELL_W} height={STACK_CELL_H}
+          cornerRadius={3}
+          fill={hasPointers ? '#e3f2fd' : '#fff'}
+          stroke={hasPointers ? '#1a73e8' : '#b0b0b0'}
+          strokeWidth={hasPointers ? 2 : 1}
+          shadowColor={hasPointers ? 'rgba(26,115,232,0.12)' : 'transparent'}
+          shadowBlur={4}
+        />
+        <Text
+          name={`label-${node.addr}`}
+          text={node.label}
+          x={x + 8} y={y + 4}
+          width={STACK_CELL_W - 16} height={18}
+          align="center" verticalAlign="middle"
+          fontSize={12} fontStyle="bold" fill="#333"
+        />
+        <Text
+          text={`[${i}]`}
+          x={x + STACK_CELL_W - 32} y={y + STACK_CELL_H - 16}
+          width={28} height={12}
+          align="center" verticalAlign="middle"
+          fontSize={9} fill="#ccc"
+        />
+      </Group>
+    );
+  });
+
+  // Top of stack indicator (arrow pointing to the last element)
+  if (nodes.length > 0) {
+    const topNode = nodes[nodes.length - 1];
+    const topPos = positions[topNode.addr];
+    if (topPos) {
+      const arrowX = topPos.x + STACK_CELL_W + 12;
+      const arrowY = topPos.cy;
+      elements.push(
+        <Fragment key="top-indicator">
+          <Line
+            points={[topPos.x + STACK_CELL_W, topPos.cy, arrowX, arrowY]}
+            stroke="#e65100" strokeWidth={1.5}
+          />
+          <Arrow
+            points={[arrowX - 2, arrowY - 6, arrowX, arrowY, arrowX + 6, arrowY - 6]}
+            fill="#e65100" stroke="#e65100" strokeWidth={1.5}
+            pointerLength={6} pointerWidth={6}
+          />
+          <Text text="top" x={arrowX + 6} y={arrowY - 9}
+            fontSize={10} fill="#e65100" fontStyle="bold"
+          />
+        </Fragment>
+      );
+    }
+  }
+
+  // Structure name
+  elements.push(
+    <Text key="struct-name" text={`${struct.annotation_name} (stack)`
+    } x={STACK_START_X} y={STACK_START_Y - 26}
+      fontSize={11} fill="#999" fontStyle="bold"
+    />
+  );
+
+  return <Group key={struct.annotation_name}>{elements}</Group>;
+}
+
+function renderLinkedStack(
+  struct: HeapStructure,
+  canvasSize: { w: number; h: number },
+) {
+  // Reuse linked list layout with "top" label instead of "head"
+  const layout = getLinkedListLayout(struct, canvasSize);
+  if (!layout) {
+    return (
+      <Group key={`${struct.annotation_name}-empty`} x={canvasSize.w / 2 - 40} y={canvasSize.h / 2 - 20}>
+        <Rect width={80} height={40} cornerRadius={4} fill="#f5f5f5" stroke="#ccc" strokeWidth={1} />
+        <Text text="EMPTY" x={0} y={0} width={80} height={40} align="center" verticalAlign="middle" fontSize={12} fill="#999" fontStyle="bold" />
+        <Text text={struct.annotation_name} x={40} y={45} fontSize={11} fill="#bbb" align="center" />
+      </Group>
+    );
+  }
+
+  const { positions, startX } = layout;
+  const { nodes } = struct;
+  const elements: React.ReactNode[] = [];
+
+  // Arrows between nodes
+  for (let i = 0; i < nodes.length - 1; i++) {
+    const from = positions[nodes[i].addr];
+    const to = positions[nodes[i + 1].addr];
+    if (from && to) {
+      elements.push(
+        <Arrow
+          key={`arrow-${i}`}
+          points={[from.cx + NODE_W / 2 + 4, from.cy, to.cx - NODE_W / 2 - 4, to.cy]}
+          pointerLength={8} pointerWidth={8}
+          fill="#888" stroke="#888" strokeWidth={2}
+        />
+      );
+    }
+  }
+
+  // Node rectangles
+  nodes.forEach((node) => {
+    const pos = positions[node.addr];
+    if (!pos) return;
+    const { x, y } = pos;
+    const hasPointers = node.pointers_pointing_here.length > 0;
+
+    elements.push(
+      <Group key={`ls-node-${node.addr}`} name={`node-${node.addr}`}>
+        <Rect x={x} y={y} width={NODE_W} height={NODE_H} cornerRadius={NODE_RADIUS}
+          fill={hasPointers ? '#e3f2fd' : '#fff'}
+          stroke={hasPointers ? '#1a73e8' : '#c0c0c0'}
+          strokeWidth={hasPointers ? 2 : 1}
+          shadowColor={hasPointers ? 'rgba(26,115,232,0.15)' : 'transparent'} shadowBlur={6}
+        />
+        <Text name={`label-${node.addr}`} text={node.label}
+          x={x} y={y + 6} width={NODE_W} height={20}
+          align="center" verticalAlign="middle" fontSize={12} fontStyle="bold" fill="#333"
+        />
+        <Text text={shortAddr(node.addr)}
+          x={x} y={y + 24} width={NODE_W} height={16}
+          align="center" verticalAlign="middle" fontSize={9} fill="#bbb"
+        />
+      </Group>
+    );
+  });
+
+  // "top" label pointing to first node
+  if (nodes.length > 0) {
+    const topPos = positions[nodes[0].addr];
+    if (topPos) {
+      elements.push(
+        <Fragment key="top-label">
+          <Line points={[topPos.cx, topPos.y - 18, topPos.cx, topPos.y - 4]}
+            stroke="#e65100" strokeWidth={1.5} dash={[3, 3]}
+          />
+          <Rect x={topPos.cx - 16} y={topPos.y - 34} width={32} height={16} cornerRadius={3}
+            fill="#fff3e0" stroke="#e65100" strokeWidth={1}
+          />
+          <Text text="top" x={topPos.cx - 16} y={topPos.y - 34} width={32} height={16}
+            align="center" verticalAlign="middle" fontSize={10} fontStyle="bold" fill="#e65100"
+          />
+        </Fragment>
+      );
+    }
+  }
+
+  elements.push(
+    <Text key="struct-name" text={`${struct.annotation_name} (linked stack)`
+    } x={startX} y={CENTER_Y - NODE_H / 2 - 40}
+      fontSize={11} fill="#999" fontStyle="bold"
+    />
+  );
+
+  return <Group key={struct.annotation_name}>{elements}</Group>;
+}
+
+// ---- Queue rendering (circular + linked) ----
+
+function renderQueue(
+  struct: HeapStructure,
+  canvasSize: { w: number; h: number },
+) {
+  const isLinked = struct.nodes.length > 0 &&
+    typeof (struct.nodes[0].fields as Record<string, string>)?.next === 'string';
+
+  if (isLinked) {
+    return renderLinkedQueue(struct, canvasSize);
+  }
+  return renderCircularQueue(struct, canvasSize);
+}
+
+function renderCircularQueue(
+  struct: HeapStructure,
+  canvasSize: { w: number; h: number },
+) {
+  const layout = getQueueLayout(struct, canvasSize);
+  if (!layout) {
+    return (
+      <Group key={`${struct.annotation_name}-empty`} x={canvasSize.w / 2 - 40} y={canvasSize.h / 2 - 20}>
+        <Rect width={80} height={40} cornerRadius={4} fill="#f5f5f5" stroke="#ccc" strokeWidth={1} />
+        <Text text="EMPTY" x={0} y={0} width={80} height={40} align="center" verticalAlign="middle" fontSize={12} fill="#999" fontStyle="bold" />
+        <Text text={struct.annotation_name} x={40} y={45} fontSize={11} fill="#bbb" align="center" />
+      </Group>
+    );
+  }
+
+  const { positions, startX } = layout;
+  const { nodes } = struct;
+  const elements: React.ReactNode[] = [];
+
+  nodes.forEach((node) => {
+    const { x, y } = positions[node.addr];
+    const hasPointers = node.pointers_pointing_here.length > 0;
+    const fields = node.fields as Record<string, string>;
+    const idx = fields.index ?? '';
+
+    elements.push(
+      <Group key={`q-node-${node.addr}`} name={`node-${node.addr}`}>
+        <Rect
+          name={`rect-${node.addr}`}
+          x={x} y={y}
+          width={QUEUE_CELL_W} height={QUEUE_CELL_H}
+          cornerRadius={4}
+          fill={hasPointers ? '#e8f5e9' : '#fff'}
+          stroke={hasPointers ? '#2e7d32' : '#c0c0c0'}
+          strokeWidth={hasPointers ? 2 : 1}
+          shadowColor={hasPointers ? 'rgba(46,125,50,0.15)' : 'transparent'} shadowBlur={6}
+        />
+        <Text name={`label-${node.addr}`} text={node.label}
+          x={x} y={y + 4} width={QUEUE_CELL_W} height={20}
+          align="center" verticalAlign="middle" fontSize={13} fontStyle="bold" fill="#333"
+        />
+        <Text text={`[${idx}]`}
+          x={x} y={y + QUEUE_CELL_H + 2} width={QUEUE_CELL_W} height={16}
+          align="center" verticalAlign="middle" fontSize={10} fill="#aaa"
+        />
+      </Group>
+    );
+  });
+
+  // front/rear labels over the first/last nodes with pointers
+  if (nodes.length > 0) {
+    const frontNode = nodes[0];
+    const lastNode = nodes[nodes.length - 1];
+    const frontPos = positions[frontNode.addr];
+    const rearPos = positions[lastNode.addr];
+    if (frontPos) {
+      elements.push(
+        <Fragment key="front-label">
+          <Line points={[frontPos.cx, frontPos.y - 16, frontPos.cx, frontPos.y - 4]}
+            stroke="#1a73e8" strokeWidth={1.5} dash={[3, 3]}
+          />
+          <Rect x={frontPos.cx - 20} y={frontPos.y - 32} width={40} height={16} cornerRadius={3}
+            fill="#e3f2fd" stroke="#1a73e8" strokeWidth={1}
+          />
+          <Text text="front" x={frontPos.cx - 20} y={frontPos.y - 32} width={40} height={16}
+            align="center" verticalAlign="middle" fontSize={10} fontStyle="bold" fill="#1a73e8"
+          />
+        </Fragment>
+      );
+    }
+    if (rearPos && rearPos !== frontPos) {
+      elements.push(
+        <Fragment key="rear-label">
+          <Line points={[rearPos.cx, rearPos.y - 16, rearPos.cx, rearPos.y - 4]}
+            stroke="#e65100" strokeWidth={1.5} dash={[3, 3]}
+          />
+          <Rect x={rearPos.cx - 18} y={rearPos.y - 32} width={36} height={16} cornerRadius={3}
+            fill="#fff3e0" stroke="#e65100" strokeWidth={1}
+          />
+          <Text text="rear" x={rearPos.cx - 18} y={rearPos.y - 32} width={36} height={16}
+            align="center" verticalAlign="middle" fontSize={10} fontStyle="bold" fill="#e65100"
+          />
+        </Fragment>
+      );
+    }
+  }
+
+  elements.push(
+    <Text key="struct-name" text={`${struct.annotation_name} (queue)`
+    } x={startX} y={CENTER_Y - QUEUE_CELL_H / 2 - 42}
+      fontSize={11} fill="#999" fontStyle="bold"
+    />
+  );
+
+  return <Group key={struct.annotation_name}>{elements}</Group>;
+}
+
+function renderLinkedQueue(
+  struct: HeapStructure,
+  canvasSize: { w: number; h: number },
+) {
+  const layout = getLinkedListLayout(struct, canvasSize);
+  if (!layout) {
+    return (
+      <Group key={`${struct.annotation_name}-empty`} x={canvasSize.w / 2 - 40} y={canvasSize.h / 2 - 20}>
+        <Rect width={80} height={40} cornerRadius={4} fill="#f5f5f5" stroke="#ccc" strokeWidth={1} />
+        <Text text="EMPTY" x={0} y={0} width={80} height={40} align="center" verticalAlign="middle" fontSize={12} fill="#999" fontStyle="bold" />
+        <Text text={struct.annotation_name} x={40} y={45} fontSize={11} fill="#bbb" align="center" />
+      </Group>
+    );
+  }
+
+  const { positions, startX } = layout;
+  const { nodes } = struct;
+  const elements: React.ReactNode[] = [];
+
+  // Arrows between nodes
+  for (let i = 0; i < nodes.length - 1; i++) {
+    const from = positions[nodes[i].addr];
+    const to = positions[nodes[i + 1].addr];
+    if (from && to) {
+      elements.push(
+        <Arrow key={`arrow-${i}`}
+          points={[from.cx + NODE_W / 2 + 4, from.cy, to.cx - NODE_W / 2 - 4, to.cy]}
+          pointerLength={8} pointerWidth={8} fill="#888" stroke="#888" strokeWidth={2}
+        />
+      );
+    }
+  }
+
+  // Nodes
+  nodes.forEach((node) => {
+    const pos = positions[node.addr];
+    if (!pos) return;
+    const { x, y } = pos;
+    const hasPointers = node.pointers_pointing_here.length > 0;
+
+    elements.push(
+      <Group key={`lq-node-${node.addr}`} name={`node-${node.addr}`}>
+        <Rect x={x} y={y} width={NODE_W} height={NODE_H} cornerRadius={NODE_RADIUS}
+          fill={hasPointers ? '#e3f2fd' : '#fff'}
+          stroke={hasPointers ? '#1a73e8' : '#c0c0c0'}
+          strokeWidth={hasPointers ? 2 : 1}
+          shadowColor={hasPointers ? 'rgba(26,115,232,0.15)' : 'transparent'} shadowBlur={6}
+        />
+        <Text name={`label-${node.addr}`} text={node.label}
+          x={x} y={y + 6} width={NODE_W} height={20}
+          align="center" verticalAlign="middle" fontSize={12} fontStyle="bold" fill="#333"
+        />
+        <Text text={shortAddr(node.addr)}
+          x={x} y={y + 24} width={NODE_W} height={16}
+          align="center" verticalAlign="middle" fontSize={9} fill="#bbb"
+        />
+      </Group>
+    );
+  });
+
+  // front/rear labels
+  if (nodes.length > 0) {
+    const firstPos = positions[nodes[0].addr];
+    const lastPos = positions[nodes[nodes.length - 1].addr];
+    if (firstPos) {
+      elements.push(
+        <Fragment key="front-label">
+          <Line points={[firstPos.cx, firstPos.y - 16, firstPos.cx, firstPos.y - 4]}
+            stroke="#1a73e8" strokeWidth={1.5} dash={[3, 3]}
+          />
+          <Rect x={firstPos.cx - 20} y={firstPos.y - 32} width={40} height={16} cornerRadius={3}
+            fill="#e3f2fd" stroke="#1a73e8" strokeWidth={1}
+          />
+          <Text text="front" x={firstPos.cx - 20} y={firstPos.y - 32} width={40} height={16}
+            align="center" verticalAlign="middle" fontSize={10} fontStyle="bold" fill="#1a73e8"
+          />
+        </Fragment>
+      );
+    }
+    if (lastPos && lastPos !== firstPos) {
+      elements.push(
+        <Fragment key="rear-label">
+          <Line points={[lastPos.cx, lastPos.y - 16, lastPos.cx, lastPos.y - 4]}
+            stroke="#e65100" strokeWidth={1.5} dash={[3, 3]}
+          />
+          <Rect x={lastPos.cx - 18} y={lastPos.y - 32} width={36} height={16} cornerRadius={3}
+            fill="#fff3e0" stroke="#e65100" strokeWidth={1}
+          />
+          <Text text="rear" x={lastPos.cx - 18} y={lastPos.y - 32} width={36} height={16}
+            align="center" verticalAlign="middle" fontSize={10} fontStyle="bold" fill="#e65100"
+          />
+        </Fragment>
+      );
+    }
+  }
+
+  elements.push(
+    <Text key="struct-name" text={`${struct.annotation_name} (linked queue)`
+    } x={startX} y={CENTER_Y - NODE_H / 2 - 40}
+      fontSize={11} fill="#999" fontStyle="bold"
+    />
+  );
+
+  return <Group key={struct.annotation_name}>{elements}</Group>;
+}
+
+// ---- Heap (binary heap, array-as-tree) rendering ----
+
+function renderHeap(
+  struct: HeapStructure,
+  canvasSize: { w: number; h: number },
+) {
+  // Build a virtual binary tree from array indices (0-based)
+  const { nodes } = struct;
+  if (nodes.length === 0) {
+    return (
+      <Group key={`${struct.annotation_name}-empty`} x={canvasSize.w / 2 - 40} y={canvasSize.h / 2 - 20}>
+        <Rect width={80} height={40} cornerRadius={4} fill="#f5f5f5" stroke="#ccc" strokeWidth={1} />
+        <Text text="EMPTY" x={0} y={0} width={80} height={40} align="center" verticalAlign="middle" fontSize={12} fill="#999" fontStyle="bold" />
+        <Text text={struct.annotation_name} x={40} y={45} fontSize={11} fill="#bbb" align="center" />
+      </Group>
+    );
+  }
+
+  // Compute depth for each node using heap property: child at 2i+1, 2i+2
+  const depth: number[] = nodes.map((_, i) => {
+    let d = 0;
+    let idx = i;
+    while (idx > 0) { idx = Math.floor((idx - 1) / 2); d++; }
+    return d;
+  });
+  const maxDepth = Math.max(...depth);
+
+  // Group by depth
+  const nodesByDepth: number[][] = Array.from({ length: maxDepth + 1 }, () => []);
+  depth.forEach((d, i) => nodesByDepth[d].push(i));
+
+  // Position nodes
+  const positions: { x: number; y: number }[] = [];
+  const startY = 30;
+  const usableWidth = canvasSize.w - 60;
+
+  for (let level = 0; level <= maxDepth; level++) {
+    const count = nodesByDepth[level].length;
+    const gap = count > 1 ? Math.min(100, usableWidth / (count + 1)) : 0;
+    const totalWidth = count > 1 ? (count - 1) * gap : 0;
+    const startX = (canvasSize.w - totalWidth) / 2;
+
+    nodesByDepth[level].forEach((nodeIdx, i) => {
+      positions[nodeIdx] = {
+        x: count === 1 ? canvasSize.w / 2 : startX + i * gap,
+        y: startY + level * TREE_LEVEL_H,
+      };
+    });
+  }
+
+  const elements: React.ReactNode[] = [];
+
+  // Edges from parent to children
+  for (let i = 0; i < nodes.length; i++) {
+    const left = 2 * i + 1;
+    const right = 2 * i + 2;
+    if (left < nodes.length && positions[i] && positions[left]) {
+      elements.push(
+        <Arrow key={`heap-edge-${i}-l`}
+          points={[positions[i].x, positions[i].y + TREE_NODE_RADIUS,
+                   positions[left].x, positions[left].y - TREE_NODE_RADIUS]}
+          pointerLength={6} pointerWidth={6} fill="#888" stroke="#888" strokeWidth={1.5}
+        />
+      );
+    }
+    if (right < nodes.length && positions[i] && positions[right]) {
+      elements.push(
+        <Arrow key={`heap-edge-${i}-r`}
+          points={[positions[i].x, positions[i].y + TREE_NODE_RADIUS,
+                   positions[right].x, positions[right].y - TREE_NODE_RADIUS]}
+          pointerLength={6} pointerWidth={6} fill="#888" stroke="#888" strokeWidth={1.5}
+        />
+      );
+    }
+  }
+
+  // Nodes as circles
+  nodes.forEach((node, i) => {
+    const pos = positions[i];
+    if (!pos) return;
+    const hasPointers = node.pointers_pointing_here.length > 0;
+
+    elements.push(
+      <Group key={`heap-node-${node.addr}`} name={`node-${node.addr}`}
+        x={pos.x} y={pos.y}>
+        <Circle radius={TREE_NODE_RADIUS}
+          fill={hasPointers ? '#e8f5e9' : '#fff'}
+          stroke={hasPointers ? '#2e7d32' : '#c0c0c0'}
+          strokeWidth={hasPointers ? 2.5 : 1.5}
+          shadowColor={hasPointers ? 'rgba(46,125,50,0.15)' : 'transparent'} shadowBlur={6}
+        />
+        <Text name={`label-${node.addr}`} text={node.label}
+          x={-TREE_NODE_RADIUS} y={-6} width={TREE_NODE_RADIUS * 2} height={16}
+          align="center" verticalAlign="middle" fontSize={13} fontStyle="bold" fill="#333"
+        />
+        <Text text={`[${i}]`}
+          x={-TREE_NODE_RADIUS} y={10} width={TREE_NODE_RADIUS * 2} height={12}
+          align="center" verticalAlign="middle" fontSize={8} fill="#bbb"
+        />
+      </Group>
+    );
+  });
+
+  // Structure name
+  elements.push(
+    <Text key="struct-name" text={`${struct.annotation_name} (heap)`
+    } x={canvasSize.w / 2 - 30} y={6} width={60}
+      fontSize={11} fill="#999" fontStyle="bold" align="center"
+    />
+  );
+
+  return <Group key={struct.annotation_name}>{elements}</Group>;
+}
+
+// ---- Graph rendering ----
+
+function renderGraph(
+  struct: HeapStructure,
+  canvasSize: { w: number; h: number },
+) {
+  const { nodes, edges } = struct;
+  if (nodes.length === 0) {
+    return (
+      <Group key={`${struct.annotation_name}-empty`} x={canvasSize.w / 2 - 40} y={canvasSize.h / 2 - 20}>
+        <Rect width={80} height={40} cornerRadius={4} fill="#f5f5f5" stroke="#ccc" strokeWidth={1} />
+        <Text text="EMPTY" x={0} y={0} width={80} height={40} align="center" verticalAlign="middle" fontSize={12} fill="#999" fontStyle="bold" />
+        <Text text={struct.annotation_name} x={40} y={45} fontSize={11} fill="#bbb" align="center" />
+      </Group>
+    );
+  }
+
+  // Circular layout for graph vertices
+  const cx = GRAPH_CENTER_X;
+  const cy = GRAPH_CENTER_Y;
+  const radius = GRAPH_RADIUS;
+  const vertexCount = nodes.length;
+
+  const positions: { x: number; y: number }[] = [];
+  for (let i = 0; i < vertexCount; i++) {
+    const angle = (2 * Math.PI * i) / vertexCount - Math.PI / 2;
+    positions.push({
+      x: cx + radius * Math.cos(angle),
+      y: cy + radius * Math.sin(angle),
+    });
+  }
+
+  const elements: React.ReactNode[] = [];
+
+  // Edges with arrows
+  edges.forEach((edge, i) => {
+    const from = positions[edge.from_idx];
+    const to = positions[edge.to_idx];
+    if (!from || !to) return;
+
+    // Compute line with offset from circle boundary
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 1) return;
+    const nx = dx / dist;
+    const ny = dy / dist;
+    const startX = from.x + nx * GRAPH_NODE_RADIUS;
+    const startY = from.y + ny * GRAPH_NODE_RADIUS;
+    const endX = to.x - nx * GRAPH_NODE_RADIUS;
+    const endY = to.y - ny * GRAPH_NODE_RADIUS;
+
+    elements.push(
+      <Arrow key={`graph-edge-${i}`}
+        points={[startX, startY, endX, endY]}
+        pointerLength={8} pointerWidth={8} fill="#888" stroke="#888" strokeWidth={1.5}
+      />
+    );
+  });
+
+  // Vertex circles
+  nodes.forEach((node, i) => {
+    const pos = positions[i];
+    if (!pos) return;
+    const hasPointers = node.pointers_pointing_here.length > 0;
+
+    elements.push(
+      <Group key={`graph-node-${node.addr}`} name={`node-${node.addr}`}
+        x={pos.x} y={pos.y}>
+        <Circle radius={GRAPH_NODE_RADIUS}
+          fill={hasPointers ? '#e8f5e9' : '#fff'}
+          stroke={hasPointers ? '#2e7d32' : '#c0c0c0'}
+          strokeWidth={hasPointers ? 2.5 : 1.5}
+          shadowColor={hasPointers ? 'rgba(46,125,50,0.15)' : 'transparent'} shadowBlur={6}
+        />
+        <Text name={`label-${node.addr}`} text={node.label}
+          x={-GRAPH_NODE_RADIUS} y={-6} width={GRAPH_NODE_RADIUS * 2} height={16}
+          align="center" verticalAlign="middle" fontSize={13} fontStyle="bold" fill="#333"
+        />
+      </Group>
+    );
+  });
+
+  elements.push(
+    <Text key="struct-name" text={`${struct.annotation_name} (graph)`
+    } x={cx - 30} y={cy - radius - 28} width={60}
+      fontSize={11} fill="#999" fontStyle="bold" align="center"
+    />
+  );
+
+  return <Group key={struct.annotation_name}>{elements}</Group>;
+}
+
+// ---- Hashmap rendering ----
+
+function renderHashmap(
+  struct: HeapStructure,
+  canvasSize: { w: number; h: number },
+) {
+  const { nodes, edges } = struct;
+  if (nodes.length === 0) {
+    return (
+      <Group key={`${struct.annotation_name}-empty`} x={canvasSize.w / 2 - 40} y={canvasSize.h / 2 - 20}>
+        <Rect width={80} height={40} cornerRadius={4} fill="#f5f5f5" stroke="#ccc" strokeWidth={1} />
+        <Text text="EMPTY" x={0} y={0} width={80} height={40} align="center" verticalAlign="middle" fontSize={12} fill="#999" fontStyle="bold" />
+        <Text text={struct.annotation_name} x={40} y={45} fontSize={11} fill="#bbb" align="center" />
+      </Group>
+    );
+  }
+
+  const elements: React.ReactNode[] = [];
+
+  // Separate bucket nodes from chain nodes
+  // Bucket nodes have an index field and are first in the array
+  const bucketNodes = nodes.filter(n => {
+    const fields = n.fields as Record<string, string>;
+    return fields.bucket_idx !== undefined;
+  });
+
+  // If no bucket nodes (flat structure), treat all as buckets
+  const allBuckets = bucketNodes.length > 0 ? bucketNodes : nodes;
+  const chainNodes = bucketNodes.length > 0
+    ? nodes.filter(n => (n.fields as Record<string, string>).bucket_idx === undefined)
+    : [];
+
+  const startX = Math.max(40, (canvasSize.w - allBuckets.length * (HMAP_BUCKET_W + 8)) / 2);
+  const startY = 60;
+
+  // Layout buckets horizontally
+  const bucketPositions: Map<string, { x: number; y: number; cx: number; cy: number }> = new Map();
+  allBuckets.forEach((node, i) => {
+    const x = startX + i * (HMAP_BUCKET_W + 8);
+    const y = startY;
+    bucketPositions.set(node.addr, { x, y, cx: x + HMAP_BUCKET_W / 2, cy: y + HMAP_BUCKET_H / 2 });
+    const fields = node.fields as Record<string, string>;
+    const idx = fields.bucket_idx ?? fields.index ?? String(i);
+
+    elements.push(
+      <Group key={`hmap-bucket-${node.addr}`} name={`node-${node.addr}`}>
+        <Rect name={`rect-${node.addr}`}
+          x={x} y={y} width={HMAP_BUCKET_W} height={HMAP_BUCKET_H}
+          cornerRadius={4} fill="#fff" stroke="#7986cb" strokeWidth={2}
+        />
+        <Text text={`[${idx}]`}
+          x={x + 4} y={y + 2} width={36} height={16}
+          fontSize={10} fill="#7986cb" fontStyle="bold"
+        />
+        <Text name={`label-${node.addr}`} text={node.label}
+          x={x + 36} y={y + 2} width={HMAP_BUCKET_W - 44} height={16}
+          align="right" verticalAlign="middle" fontSize={12} fontStyle="bold" fill="#333"
+        />
+        <Text text={shortAddr(node.addr)}
+          x={x + 4} y={y + HMAP_BUCKET_H - 16} width={HMAP_BUCKET_W - 8} height={14}
+          align="left" verticalAlign="middle" fontSize={9} fill="#bbb"
+        />
+      </Group>
+    );
+  });
+
+  // Layout chain nodes below their parent buckets
+  // Use edges to determine which chain nodes belong to which bucket
+  const bucketChains: Map<string, { addr: string; x: number; y: number; cx: number; cy: number }[]> = new Map();
+
+  // Process edges to build chains
+  edges.forEach((edge) => {
+    const fromIdx = edge.from_idx;
+    const toIdx = edge.to_idx;
+    if (fromIdx < nodes.length && toIdx < nodes.length) {
+      const fromNode = nodes[fromIdx];
+      const toNode = nodes[toIdx];
+      const fromPos = bucketPositions.get(fromNode.addr);
+      if (fromPos) {
+        // from is a bucket — add chain node
+        const chain = bucketChains.get(fromNode.addr) ?? [];
+        const chainIdx = chain.length;
+        const cy = fromPos.y + HMAP_BUCKET_H + 18 + chainIdx * (NODE_H + 6);
+        chain.push({
+          addr: toNode.addr,
+          x: fromPos.x + HMAP_BUCKET_W + HMAP_CHAIN_GAP,
+          y: cy - NODE_H / 2,
+          cx: fromPos.x + HMAP_BUCKET_W + HMAP_CHAIN_GAP + NODE_W / 2,
+          cy,
+        });
+        bucketChains.set(fromNode.addr, chain);
+
+        // Arrow from bucket to first chain node, or chain-to-chain
+        const prevAddr = chainIdx > 0 ? chain[chainIdx - 1].addr : fromNode.addr;
+        const prevNode = chainIdx > 0
+          ? { addr: prevAddr, x: fromPos.x + HMAP_BUCKET_W + HMAP_CHAIN_GAP,
+              cx: fromPos.x + HMAP_BUCKET_W + HMAP_CHAIN_GAP + NODE_W / 2,
+              y: fromPos.y + HMAP_BUCKET_H + 18 + (chainIdx - 1) * (NODE_H + 6) - NODE_H / 2,
+              cy: fromPos.y + HMAP_BUCKET_H + 18 + (chainIdx - 1) * (NODE_H + 6) }
+          : { addr: fromNode.addr, x: fromPos.x, cx: fromPos.cx, y: fromPos.y, cy: fromPos.cy };
+      }
+    }
+  });
+
+  // Render chain nodes with arrows
+  bucketChains.forEach((chain, bucketAddr) => {
+    const bucketPos = bucketPositions.get(bucketAddr);
+    if (!bucketPos) return;
+
+    chain.forEach((chainNode, ci) => {
+      elements.push(
+        <Group key={`hmap-chain-${chainNode.addr}`} name={`node-${chainNode.addr}`}>
+          <Rect x={chainNode.x} y={chainNode.y} width={NODE_W} height={NODE_H}
+            cornerRadius={6} fill="#fff" stroke="#c0c0c0" strokeWidth={1}
+          />
+          <Text name={`label-${chainNode.addr}`}
+            text={nodes.find(n => n.addr === chainNode.addr)?.label ?? ''}
+            x={chainNode.x} y={chainNode.y + 6} width={NODE_W} height={20}
+            align="center" verticalAlign="middle" fontSize={12} fontStyle="bold" fill="#333"
+          />
+          <Text text={shortAddr(chainNode.addr)}
+            x={chainNode.x} y={chainNode.y + 24} width={NODE_W} height={16}
+            align="center" verticalAlign="middle" fontSize={9} fill="#bbb"
+          />
+        </Group>
+      );
+
+      // Arrow
+      const fromPos = ci === 0 ? bucketPos : chain[ci - 1];
+      if (fromPos) {
+        elements.push(
+          <Arrow key={`hmap-arrow-${bucketAddr}-${ci}`}
+            points={[fromPos.cx + (ci === 0 ? HMAP_BUCKET_W / 2 : NODE_W / 2) + 4,
+                     fromPos.cy,
+                     chainNode.cx - NODE_W / 2 - 4,
+                     chainNode.cy]}
+            pointerLength={8} pointerWidth={8} fill="#888" stroke="#888" strokeWidth={1.5}
+          />
+        );
+      }
+    });
+  });
+
+  elements.push(
+    <Text key="struct-name" text={`${struct.annotation_name} (hashmap)`
+    } x={startX} y={startY - 28}
+      fontSize={11} fill="#999" fontStyle="bold"
+    />
+  );
+
+  return <Group key={struct.annotation_name}>{elements}</Group>;
 }
 
 // ---------------------------------------------------------------------------

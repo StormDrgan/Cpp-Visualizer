@@ -244,6 +244,127 @@ class MemoryWalker:
             nodes=nodes,
         )
 
+    def walk_graph(
+        self,
+        annotation_name: str,
+        root_var: str,
+        mode: str = "adjlist",
+        size_var: str = "",
+        watched_vars: list[str] | None = None,
+    ) -> TraversalResult:
+        """Walk a graph structure (adjacency matrix or adjacency list).
+
+        Args:
+            annotation_name: User-given name (e.g., "G").
+            root_var: C++ variable name of the graph data structure.
+            mode: "matrix" for adjacency matrix, "adjlist" for adjacency list.
+            size_var: Variable name for vertex count.
+            watched_vars: Optional list of pointer variable names to match.
+        """
+        if watched_vars is None:
+            watched_vars = []
+
+        resp = self._send({
+            "cmd": "walk_graph",
+            "root_var": root_var,
+            "mode": mode,
+            "size_var": size_var,
+        })
+
+        if not resp.get("ok"):
+            return TraversalResult(
+                annotation_name=annotation_name,
+                structure_type="graph",
+                root_node_addr="0x0",
+            )
+
+        result = resp.get("result", {})
+        raw_nodes = result.get("nodes", [])
+        raw_edges = result.get("edges", [])
+        root_addr = raw_nodes[0]["addr"] if raw_nodes else "0x0"
+
+        nodes = [HeapNode(
+            addr=n.get("addr", "0x0"),
+            label=n.get("label", ""),
+            fields=n.get("fields", {}),
+        ) for n in raw_nodes]
+
+        edges = [TreeEdge(
+            from_idx=e.get("from_idx", -1),
+            to_idx=e.get("to_idx", -1),
+            child_side="",
+        ) for e in raw_edges]
+
+        if watched_vars and nodes:
+            self._match_pointers(nodes, watched_vars)
+
+        return TraversalResult(
+            annotation_name=annotation_name,
+            structure_type="graph",
+            root_node_addr=root_addr,
+            nodes=nodes,
+            edges=edges,
+        )
+
+    def walk_hashmap(
+        self,
+        annotation_name: str,
+        root_var: str,
+        mode: str = "chaining",
+        watched_vars: list[str] | None = None,
+    ) -> TraversalResult:
+        """Walk a hash table structure.
+
+        Args:
+            annotation_name: User-given name (e.g., "H").
+            root_var: C++ variable name of the hash table.
+            mode: "chaining" for separate chaining, "open_addressing" for open addressing.
+            watched_vars: Optional list of pointer variable names to match.
+        """
+        if watched_vars is None:
+            watched_vars = []
+
+        resp = self._send({
+            "cmd": "walk_hashmap",
+            "root_var": root_var,
+            "mode": mode,
+        })
+
+        if not resp.get("ok"):
+            return TraversalResult(
+                annotation_name=annotation_name,
+                structure_type="hashmap",
+                root_node_addr="0x0",
+            )
+
+        result = resp.get("result", {})
+        raw_nodes = result.get("nodes", [])
+        raw_edges = result.get("edges", [])
+        root_addr = raw_nodes[0]["addr"] if raw_nodes else "0x0"
+
+        nodes = [HeapNode(
+            addr=n.get("addr", "0x0"),
+            label=n.get("label", ""),
+            fields=n.get("fields", {}),
+        ) for n in raw_nodes]
+
+        edges = [TreeEdge(
+            from_idx=e.get("from_idx", -1),
+            to_idx=e.get("to_idx", -1),
+            child_side="",
+        ) for e in raw_edges]
+
+        if watched_vars and nodes:
+            self._match_pointers(nodes, watched_vars)
+
+        return TraversalResult(
+            annotation_name=annotation_name,
+            structure_type="hashmap",
+            root_node_addr=root_addr,
+            nodes=nodes,
+            edges=edges,
+        )
+
     def _match_pointers(self, nodes: list[HeapNode], watched_vars: list[str]) -> None:
         """For each watched variable, find which node it points to.
 

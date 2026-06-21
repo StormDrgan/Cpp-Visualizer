@@ -2,7 +2,7 @@
 
 > **目标用户**：个人开发者，用于理解复杂数据结构与算法代码
 > **核心体验**：逐行步进 → 可前进/后退 → 指针位置实时可视化
-> **版本**：v0.3，持续迭代
+> **版本**：v0.5，持续迭代
 
 ---
 
@@ -606,15 +606,16 @@ class MemoryWalker:
 {"type": "stdout", "payload": {"text": "Hello World\n"}}
 ```
 
-### 5.2 通信模式选择
+### 5.2 通信模式（v0.5 实现）
 
-**开发阶段：HTTP + 轮询（更简单）**
+**当前模式：WebSocket 为主，HTTP 为回退**
 
-- POST `/api/session/:id/step` → 同步返回 State Snapshot JSON
-- 简单直接，不用维护 WebSocket 长连接
-- 对于每步 ~200ms 的场景，HTTP 开销可忽略
-
-**后续可升级为 WebSocket**（如果需要推送 stdout 流）
+- WebSocket 端点 `/ws/{session_id}` — 持久连接，双向 JSON 消息
+- 前端 `WebSocketClient` 类 — 自动重连（指数退避，最多 5 次）
+- Zustand store 双通道：`wsClient?.connected` 时优先 `ws.send()`，否则 `api.xxx()` HTTP fallback
+- Vite dev proxy 同时代理 `/api`（HTTP）和 `/ws`（WebSocket）
+- HTTP REST API 完整保留，断网或 WS 故障时无缝降级
+- 消息类型与 §5.1 一致：`load`/`step`/`back`/`forward`/`run_to`/`reset`/`set_breakpoint`/`remove_breakpoint`/`eval`
 
 ---
 
@@ -844,57 +845,122 @@ diff 算法核心（逐个标注的数据结构做）：
 | 变量显示优化 | ✅ 隐藏原始地址，只显示解引用后的结构体内容 |
 | Canvas 溢出处理 | ✅ 拖拽平移 + 滚轮缩放（0.25x ~ 3x） |
 
-### v0.4 — 数组可视化 + 断点
+### v0.4 — 数组可视化 + 断点 ✅ 已完成
 
 **目标：排序算法、二分搜索可视化**
 
-| 任务 | 预估 |
+| 任务 | 状态 |
 |---|---|
-| Memory Walker - 数组 | 数组自动检测 |
-| Canvas 数组渲染 | 柱状图 + 格子模式 |
-| 排序动画 | 比较/交换闪动 |
-| 断点系统 | 设置/删除/运行到断点 |
-| **示例模板切换** | 顶部下拉框：链表反转 / BST 搜索 / 数组排序… 一键切换独立示例，不用手写代码 |
+| Memory Walker - 数组 | ✅ `walk_array`：LLDB 循环 evaluate `arr[i]`，返回索引+值+地址，max 500 元素 |
+| Canvas 数组渲染 | ✅ 水平格子模式：72×40 单元格 + 索引标签 + watched 指针标签 |
+| @viz array 标注 | ✅ `@viz array(A) var=arr.length_var=n` 正则解析 + VariablePanel 表单 |
+| 断点系统 | ✅ 设置/删除/运行到断点，LLDB 层真正删除（`target.BreakpointDelete`）|
+| 示例模板切换 | ✅ Header 下拉框 8 个模板：链表反转/找中点/BST搜索/BST插入/冒泡排序/二分查找/链表环检测/选择排序 |
+| 断点移除修复 | ✅ `remove_breakpoint` 遍历 `target.GetNumBreakpoints()` 按行号+源文件匹配删除 |
+| Watched 指针双相匹配 | ✅ Phase 1 地址匹配（指针变量）+ Phase 2 索引匹配（数组下标 i/j/lo/hi/mid）|
 
-### v0.5 — 打磨
+### v0.5 — 通信 + 自动识别 + 动画 ✅ 已完成
 
-| 任务 | 预估 |
+**目标：实时通信、零标注可视化、排序动画**
+
+| 任务 | 状态 |
 |---|---|
-| WebSocket 通信 | 替代 HTTP 轮询 |
-| Docker 隔离 | 安全加固 |
-| 多文件支持 | 项目级编译 |
-| 自动识别 | 启发式数据结构检测 |
-| 历史步骤列表 | 点击任意历史步骤跳转 |
-| 移动端适配 | 响应式布局 |
+| WebSocket 通信 | ✅ `/ws/{session_id}` 端点，9 种消息类型，Zustand 双通道（WS 优先 → HTTP 回退），自动重连（指数退避最多 5 次）|
+| 共享状态模块 | ✅ `backend/state.py` — `_debuggers`/`_compilers`/`_walkers` 等 7 个 dict + getter/setter，HTTP 和 WS 路由共享 |
+| 自动识别 | ✅ `inspect_type` bridge 命令（`SBType.GetFields` 枚举）→ `MemoryWalker.auto_discover` → 无 @viz 标注时自动检测链表/二叉树/数组 |
+| 排序动画 — 比较 | ✅ `element_compared` diff action：两元素格子闪黄（#ffa726, 0.3s）→ 恢复原色 |
+| 排序动画 — 交换 | ✅ `element_swapped` diff action：两格闪橙（#ef6c00, 0.08s）→ 旧值灰化 → 更新文本 → 闪绿恢复（0.48s total）|
+| back/forward 动画 | ✅ 后退/前进也计算 diff_actions 返回前端，时间旅行也有动画效果 |
+| 前端 WebSocketClient | ✅ `connect()`/`send()`/`on()`/`disconnect()` + 自动重连，浏览器原生 WebSocket API |
+| Vite WS 代理 | ✅ `/ws` 代理到 `ws://127.0.0.1:8000`，开发环境无缝 |
+
+### v0.6 — 新数据结构 + 算法动画 + 体验增强 ✅ 已完成
+
+**目标：802 考纲 Level 1 全覆盖，排序/遍历动画增强，历史时间轴**
+
+#### 一、新数据结构（P0，802 考纲 Level 1 必做）
+
+| 数据结构 | 类别 | @viz 标注 | 渲染要点 | 状态 |
+|---|---|---|---|---|
+| **栈（顺序栈）** | 线性表 — 顺序存储 | `@viz stack(S) var=arr.top_var=top` | 垂直堆叠格子 + top 箭头指示 | ✅ |
+| **栈（链栈）** | 线性表 — 链式存储 | `@viz stack(S) var=top.next_field=next` | 复用链表渲染 + 栈顶标签 | ✅ |
+| **队列（循环队列）** | 线性表 — 顺序存储 | `@viz queue(Q) var=arr.front_var=front.rear_var=rear` | 数组格子 + front/rear 指示器 | ✅ |
+| **队列（链式队列）** | 线性表 — 链式存储 | `@viz queue(Q) var=front.next_field=next` | 复用链表渲染 + 队首队尾标签 | ✅ |
+| **堆（大顶堆/小顶堆）** | 树 — 数组存储 | `@viz heap(H) var=arr.length_var=size` | 数组→树形布局（i→2i+1,2i+2）+ 圆节点 | ✅ |
+| **邻接矩阵 / 邻接表（图）** | 图 — 两种存储 | `@viz graph(G) var=mat.mode=matrix` 或 `var=adj_list.size_var=n` | 圆形顶点布局 + 有向边箭头 | ✅ |
+| **哈希表（拉链法）** | 查找 — 散列 | `@viz hashmap(H) var=table.mode=chaining` | 桶数组 + 链表挂链 | ✅ |
+| **哈希表（开放定址法）** | 查找 — 散列 | `@viz hashmap(H) var=table.mode=open_addressing` | 槽位数组 + 空/占标记 | ✅ |
+
+**关键技术实现：**
+- 栈（顺序）复用 `walk_array` walker；栈（链式）复用 `walk_linked_list` walker
+- 队列（循环）复用 `walk_array` walker；队列（链式）复用 `walk_linked_list` walker
+- 堆：数组 walk → Canvas 层按完全二叉树关系 (2i+1, 2i+2) 计算树形坐标
+- 图（邻接矩阵）：`_walk_adjacency_matrix` 遍历二维数组，`mat[i][j] != 0` 生成边
+- 图（邻接表）：`_walk_adjacency_list` 遍历数组 + 链式边节点，生成顶点 + 有向边
+- 哈希表（拉链）：`_walk_hashmap_chaining` 遍历桶数组 + 链式节点，生成桶→链边
+- 哈希表（开放定址）：`_walk_hashmap_open_addressing` 遍历槽位，标记空/占
+
+#### 二、算法动画增强（P1，v0.7 规划）
+
+| 功能 | 说明 |
+|---|---|
+| **排序动画增强** | watched 指针（i, j, minIdx）直接推断比较/交换目标，不依赖 diff 交叉匹配；单步内区分「比较」和「交换」两个阶段 |
+| **栈/队列操作动画** | push/pop/enqueue/dequeue 节点级动画（滑入、弹出、淡出） |
+| **堆操作动画** | 上浮（sift-up）/ 下沉（sift-down）节点沿路径交换动画 |
+| **图遍历动画** | BFS 队列扩张 + 节点染色；DFS 递归栈 + 回溯染色 |
+| **递归树可视化** | 递归调用栈渲染为树形结构，展示分治过程 |
+
+#### 三、体验增强（P1–P2，v0.7 规划）
+
+| 功能 | 优先级 | 说明 |
+|---|---|---|
+| **历史步骤列表** | P1 | 左侧步骤时间轴，展示每步行号+操作摘要，点击任意步骤跳转（利用现有 history 栈，低成本）|
+| **自动识别增强** | P1 | 识别更多结构（双向链表、循环链表、AVL），减少手动标注 |
+| **Docker 隔离** | P2 | 编译安全加固，多用户编译/运行隔离 |
+
+#### 当前进度总览
+
+```
+v0.1 ✅ 最小可用原型        v0.4 ✅ 数组可视化 + 断点
+v0.2 ✅ 链表可视化          v0.5 ✅ WebSocket + 自动识别 + 排序动画
+v0.3 ✅ 二叉树可视化        v0.6 ✅ 9 种新数据结构 + 图/哈希表渲染
+```
 
 ---
 
 ## 8. 关键技术细节
 
-### 8.1 示例模板系统（v0.4 规划）
+### 8.1 示例模板系统
 
-每个数据结构有独立的代码模板，用户一键切换：
+预设模板列表（当前共 13 个）：
 
-```
-顶部模板选择器： [🔗 链表反转 ▾] [🌳 BST 查找] [📊 冒泡排序] …
+| 模板 | 图标 | 数据结构 | @viz 标注 |
+|---|---|---|---|
+| 链表反转 | 🔗 | linked_list | `@viz linked_list(L) head=head.next_field=next` + `@viz watch(curr, prev)` |
+| 链表找中点 | 🔗 | linked_list | `@viz linked_list(L) head=head.next_field=next` + `@viz watch(slow, fast)` |
+| BST 搜索 | 🌳 | binary_tree | `@viz binary_tree(T) root=root.left_field=left.right_field=right` + `@viz watch(curr)` |
+| BST 插入构建 | 🌳 | binary_tree | 同上 + `@viz watch(root)` |
+| 冒泡排序 | 📊 | array | `@viz array(A) var=arr.length_var=n` + `@viz watch(i, j)` |
+| 二分查找 | 📊 | array | `@viz array(A) var=arr.length_var=n` + `@viz watch(lo, hi, mid)` |
+| 链表环检测 | 🔗 | linked_list | `@viz linked_list(L) head=head.next_field=next` + `@viz watch(slow, fast)` |
+| 选择排序 | 📊 | array | `@viz array(A) var=arr.length_var=n` + `@viz watch(i, j, minIdx)` |
+| 顺序栈 | 📚 | stack | `@viz stack(S) var=arr.top_var=top` + `@viz watch(top)` |
+| 链式队列 | 🚶 | queue | `@viz queue(Q) var=front.next_field=next` + `@viz watch(front, rear)` |
+| 大顶堆 | ⛰️ | heap | `@viz heap(H) var=arr.length_var=size` + `@viz watch(i, j)` |
+| 邻接表图 | 🕸️ | graph | `@viz graph(G) var=adj.size_var=n` |
+| 哈希表（拉链法）| #️⃣ | hashmap | `@viz hashmap(H) var=table.mode=chaining` + `@viz watch(cur)` |
 
-切换后：
-  1. 代码编辑器加载预设 C++ 代码（含 @viz 标注）
-  2. 标注列表自动更新
-  3. 断点自动设置在关键行
-  4. 点击「编译运行」即可开始调试
-```
+### 8.1.1 自动识别（v0.5 新增）
 
-预设模板列表（随版本迭代扩充）：
+当代码中没有 `// @viz` 标注时，系统自动检测数据结构：
 
-| 模板 | 数据结构 | @viz 标注 |
-|---|---|---|
-| 链表反转 | linked_list | `@viz linked_list(L) head=head.next_field=next` + `@viz watch(curr, prev)` |
-| 链表找中点 | linked_list | `@viz linked_list(L) head=head.next_field=next` + `@viz watch(slow, fast)` |
-| BST 插入 | binary_tree | `@viz binary_tree(T) root=root.left_field=left.right_field=right` |
-| BST 搜索 | binary_tree | 同上 + `@viz watch(curr)` |
-| 冒泡排序 | array | `@viz array(A) ptr=arr.length_field=n` |
-| 二分查找 | array | 同上 + `@viz watch(lo, hi, mid)` |
+1. 遍历 LLDB 局部变量 → 筛选 `is_pointer=True` 且 `deref_type` 非空的变量
+2. 调用 `inspect_type` bridge 命令获取 struct 字段布局
+3. 分类逻辑：
+   - 2 个指向同类型的指针字段 → **二叉树**（优先 left/right 命名）
+   - 1 个指向同类型的指针字段 → **链表**
+4. 数组检测：正则匹配 `type [N]` 类型字符串 → **数组**
+5. 自动生成 `auto_{var_name}` 标注，手动 @viz 标注始终优先
 
 ### 8.2 LLDB Python API 要点（当前实现）
 
@@ -932,6 +998,15 @@ if deref_val and deref_val.IsValid():
 
 # 执行表达式
 result = frame.EvaluateExpression("slow->val")
+
+# 类型自省（v0.5 新增，供自动识别使用）
+sbtype = target.FindFirstType("ListNode")
+for i in range(sbtype.GetNumberOfFields()):
+    field = sbtype.GetFieldAtIndex(i)
+    field_name = field.GetName()       # "val", "next"
+    field_type = field.GetType()
+    type_name = field_type.GetName()   # "int", "ListNode *"
+    pointee = field_type.GetPointeeType()  # 指针指向的类型
 ```
 
 ### 8.2 编译命令

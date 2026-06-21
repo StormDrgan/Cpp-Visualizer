@@ -487,6 +487,332 @@ int main() {
       },
     ],
   },
+  {
+    id: 'stack_sequential',
+    label: '顺序栈',
+    icon: '📚',
+    description: '顺序栈 push/pop 操作（数组实现）',
+    code: `#include <iostream>
+using namespace std;
+
+// @viz stack(S) var=arr.top_var=top
+// @viz watch(top)
+int main() {
+    int arr[10];
+    int top = -1;  // 栈顶索引
+
+    // push 5 个元素
+    arr[++top] = 10;
+    arr[++top] = 20;
+    arr[++top] = 30;
+    arr[++top] = 40;
+    arr[++top] = 50;
+
+    // pop 2 个元素
+    int x = arr[top--];
+    int y = arr[top--];
+
+    // push 1 个元素
+    arr[++top] = 99;
+
+    cout << "top = " << arr[top] << endl;
+    cout << "popped: " << x << ", " << y << endl;
+    return 0;
+}
+`,
+    annotations: [
+      {
+        struct_type: 'stack',
+        name: 'S',
+        root_var: 'arr',
+        next_field: '',
+        left_field: '',
+        right_field: '',
+        length_var: '',
+        top_var: 'top',
+        watched_vars: [],
+      },
+      {
+        struct_type: 'watch',
+        name: '',
+        root_var: '',
+        next_field: '',
+        left_field: '',
+        right_field: '',
+        watched_vars: ['top'],
+      },
+    ],
+  },
+  {
+    id: 'queue_linked',
+    label: '链式队列',
+    icon: '🚶',
+    description: '链式队列 enqueue/dequeue 操作',
+    code: `#include <iostream>
+using namespace std;
+
+// @viz queue(Q) var=front.next_field=next
+// @viz watch(front, rear)
+struct QNode {
+    int val;
+    QNode* next;
+    QNode(int x) : val(x), next(nullptr) {}
+};
+
+int main() {
+    // 链式队列: front → ... → rear
+    QNode* front = nullptr;
+    QNode* rear = nullptr;
+
+    // enqueue 3 个元素
+    QNode* n1 = new QNode(10);
+    front = rear = n1;
+
+    QNode* n2 = new QNode(20);
+    rear->next = n2; rear = n2;
+
+    QNode* n3 = new QNode(30);
+    rear->next = n3; rear = n3;
+
+    // dequeue 1 个元素
+    QNode* tmp = front;
+    front = front->next;
+    delete tmp;
+
+    // enqueue 1 个
+    QNode* n4 = new QNode(99);
+    rear->next = n4; rear = n4;
+
+    if (front)
+        cout << "front = " << front->val << endl;
+    if (rear)
+        cout << "rear = " << rear->val << endl;
+    return 0;
+}
+`,
+    annotations: [
+      {
+        struct_type: 'queue',
+        name: 'Q',
+        root_var: 'front',
+        next_field: 'next',
+        left_field: '',
+        right_field: '',
+        watched_vars: [],
+      },
+      {
+        struct_type: 'watch',
+        name: '',
+        root_var: '',
+        next_field: '',
+        left_field: '',
+        right_field: '',
+        watched_vars: ['front', 'rear'],
+      },
+    ],
+  },
+  {
+    id: 'max_heap',
+    label: '大顶堆',
+    icon: '⛰️',
+    description: '数组存储的二叉堆（树形可视化）',
+    code: `#include <iostream>
+using namespace std;
+
+// @viz heap(H) var=arr.length_var=size
+// @viz watch(i, j)
+int main() {
+    // 大顶堆（数组存储）
+    // 索引 0 为根，左子 = 2i+1, 右子 = 2i+2
+    int arr[15] = {0};
+    int size = 0;
+
+    // 插入函数（内联演示）
+    auto push = [&](int val) {
+        int i = size++;
+        arr[i] = val;
+        // sift-up
+        while (i > 0) {
+            int parent = (i - 1) / 2;
+            if (arr[i] <= arr[parent]) break;
+            int tmp = arr[i];
+            arr[i] = arr[parent];
+            arr[parent] = tmp;
+            i = parent;
+        }
+    };
+
+    push(50);
+    push(30);
+    push(70);
+    push(20);
+    push(60);
+    push(40);
+    push(80);
+
+    cout << "max = " << arr[0] << endl;
+    return 0;
+}
+`,
+    annotations: [
+      {
+        struct_type: 'heap',
+        name: 'H',
+        root_var: 'arr',
+        next_field: '',
+        left_field: '',
+        right_field: '',
+        length_var: 'size',
+        watched_vars: [],
+      },
+      {
+        struct_type: 'watch',
+        name: '',
+        root_var: '',
+        next_field: '',
+        left_field: '',
+        right_field: '',
+        watched_vars: ['i', 'j'],
+      },
+    ],
+  },
+  {
+    id: 'graph_adjlist',
+    label: '邻接表图',
+    icon: '🕸️',
+    description: '邻接表存储的有向图结构',
+    code: `#include <iostream>
+using namespace std;
+
+struct EdgeNode {
+    int to;
+    EdgeNode* next;
+    EdgeNode(int v, EdgeNode* n = nullptr) : to(v), next(n) {}
+};
+
+// @viz graph(G) var=adj.size_var=n
+int main() {
+    int n = 6;  // 6 个顶点 0-5
+    EdgeNode* adj[6] = {nullptr};
+
+    // 构建有向图:
+    // 0 → 1, 2
+    // 1 → 3
+    // 2 → 3, 4
+    // 3 → 5
+    // 4 → 5
+    // 5 → 0
+    adj[0] = new EdgeNode(2, new EdgeNode(1));
+    adj[1] = new EdgeNode(3);
+    adj[2] = new EdgeNode(4, new EdgeNode(3));
+    adj[3] = new EdgeNode(5);
+    adj[4] = new EdgeNode(5);
+    adj[5] = new EdgeNode(0);
+
+    // 输出邻接表
+    for (int i = 0; i < n; i++) {
+        cout << i << " → ";
+        EdgeNode* cur = adj[i];
+        while (cur) {
+            cout << cur->to << " ";
+            cur = cur->next;
+        }
+        cout << endl;
+    }
+    return 0;
+}
+`,
+    annotations: [
+      {
+        struct_type: 'graph',
+        name: 'G',
+        root_var: 'adj',
+        next_field: '',
+        left_field: '',
+        right_field: '',
+        length_var: 'n',
+        mode: 'adjlist',
+        watched_vars: [],
+      },
+      {
+        struct_type: 'watch',
+        name: '',
+        root_var: '',
+        next_field: '',
+        left_field: '',
+        right_field: '',
+        watched_vars: [],
+      },
+    ],
+  },
+  {
+    id: 'hashmap_chaining',
+    label: '哈希表（拉链法）',
+    icon: '#️⃣',
+    description: '拉链法哈希表插入与查找',
+    code: `#include <iostream>
+using namespace std;
+
+struct HashNode {
+    int key;
+    int val;
+    HashNode* next;
+    HashNode(int k, int v, HashNode* n = nullptr) : key(k), val(v), next(n) {}
+};
+
+// @viz hashmap(H) var=table.mode=chaining
+// @viz watch(cur)
+int main() {
+    const int M = 7;
+    HashNode* table[M] = {nullptr};
+
+    // 链表头插法
+    auto put = [&](int key, int val) {
+        int idx = key % M;
+        table[idx] = new HashNode(key, val, table[idx]);
+    };
+
+    put(10, 100);
+    put(20, 200);
+    put(3, 30);   // 3 % 7 = 3
+    put(17, 170); // 17 % 7 = 3 → 冲突！挂到 3 号桶的链上
+    put(7, 70);   // 7 % 7 = 0 → 冲突！挂到 0 号桶的链上
+    put(14, 140); // 14 % 7 = 0 → 又冲突！
+    put(24, 240); // 24 % 7 = 3 → 又冲突！
+
+    // 查找 key=17
+    int target = 17;
+    HashNode* cur = table[target % M];
+    while (cur && cur->key != target) {
+        cur = cur->next;
+    }
+    if (cur)
+        cout << "found: " << cur->val << endl;
+    return 0;
+}
+`,
+    annotations: [
+      {
+        struct_type: 'hashmap',
+        name: 'H',
+        root_var: 'table',
+        next_field: '',
+        left_field: '',
+        right_field: '',
+        mode: 'chaining',
+        watched_vars: [],
+      },
+      {
+        struct_type: 'watch',
+        name: '',
+        root_var: '',
+        next_field: '',
+        left_field: '',
+        right_field: '',
+        watched_vars: ['cur'],
+      },
+    ],
+  },
 ];
 
 /** 默认模板 ID */
