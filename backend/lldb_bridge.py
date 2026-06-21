@@ -774,7 +774,7 @@ def _build_state(process: lldb.SBProcess, source_file: str, stdout_path: str | N
 
     # Locals (filter out std:: namespace pollution)
     locals_list = []
-    values = frame.GetVariables(True, True, False, False)  # no statics
+    values = frame.GetVariables(True, True, False, True)  # in_scope_only=True: skip un-executed decls
     for i in range(values.GetSize()):
         val = values.GetValueAtIndex(i)
         if not val:
@@ -785,6 +785,16 @@ def _build_state(process: lldb.SBProcess, source_file: str, stdout_path: str | N
         # Skip std:: namespace variables
         if name.startswith("std::"):
             continue
+
+        # v0.9 fix: skip variables whose declaration hasn't been fully
+        # executed yet.  At the declaration line (with init), the var is
+        # in scope but uninitialised — its pointer value is stack garbage.
+        # _is_null_addr can't catch this because garbage is almost never 0x0.
+        decl = val.GetDeclaration()
+        if decl and decl.IsValid():
+            decl_line = decl.GetLine()
+            if decl_line > 0 and decl_line >= source_line:
+                continue
         type_name = str(val.GetTypeName() or "")
         summary = val.GetSummary()
         raw_value = str(val.GetValue() or "").strip('"')

@@ -25,13 +25,21 @@ struct ListNode {
     ListNode(int x) : val(x), next(nullptr) {}
 };
 
+// 从数组创建链表，返回头节点
+ListNode* createList(int arr[], int n) {
+    if (n == 0) return nullptr;
+    ListNode* head = new ListNode(arr[0]);
+    ListNode* cur = head;
+    for (int i = 1; i < n; i++) {
+        cur->next = new ListNode(arr[i]);
+        cur = cur->next;
+    }
+    return head;
+}
+
 int main() {
-    // 构建链表: 1 -> 2 -> 3 -> 4 -> 5
-    ListNode* head = new ListNode(1);
-    head->next = new ListNode(2);
-    head->next->next = new ListNode(3);
-    head->next->next->next = new ListNode(4);
-    head->next->next->next->next = new ListNode(5);
+    int arr[] = {1, 2, 3, 4, 5};
+    ListNode* head = createList(arr, 5);
 
     // 反转链表
     ListNode* prev = nullptr;
@@ -65,14 +73,21 @@ struct ListNode {
     ListNode(int x) : val(x), next(nullptr) {}
 };
 
+// 从数组创建链表，返回头节点
+ListNode* createList(int arr[], int n) {
+    if (n == 0) return nullptr;
+    ListNode* head = new ListNode(arr[0]);
+    ListNode* cur = head;
+    for (int i = 1; i < n; i++) {
+        cur->next = new ListNode(arr[i]);
+        cur = cur->next;
+    }
+    return head;
+}
+
 int main() {
-    // 构建链表: 1 -> 2 -> 3 -> 4 -> 5 -> 6
-    ListNode* head = new ListNode(1);
-    head->next = new ListNode(2);
-    head->next->next = new ListNode(3);
-    head->next->next->next = new ListNode(4);
-    head->next->next->next->next = new ListNode(5);
-    head->next->next->next->next->next = new ListNode(6);
+    int arr[] = {1, 2, 3, 4, 5, 6};
+    ListNode* head = createList(arr, 6);
 
     // 快慢指针找中点
     ListNode* slow = head;
@@ -258,19 +273,32 @@ struct ListNode {
     ListNode(int x) : val(x), next(nullptr) {}
 };
 
+// 从数组创建链表，返回头节点
+ListNode* createList(int arr[], int n) {
+    if (n == 0) return nullptr;
+    ListNode* head = new ListNode(arr[0]);
+    ListNode* cur = head;
+    for (int i = 1; i < n; i++) {
+        cur->next = new ListNode(arr[i]);
+        cur = cur->next;
+    }
+    return head;
+}
+
 int main() {
     // 构建带环链表: 1 -> 2 -> 3 -> 4 -> 5 -> 6
     //                         ^              |
     //                         \\______________/
-    ListNode* head = new ListNode(1);
-    head->next = new ListNode(2);
-    head->next->next = new ListNode(3);
-    head->next->next->next = new ListNode(4);
-    head->next->next->next->next = new ListNode(5);
-    head->next->next->next->next->next = new ListNode(6);
+    int arr[] = {1, 2, 3, 4, 5, 6};
+    ListNode* head = createList(arr, 6);
+
+    // 找到节点 3 和尾节点 6
+    ListNode* node3 = head->next->next;          // 第 3 个节点
+    ListNode* tail = head;
+    while (tail->next) tail = tail->next;        // 走到尾节点
 
     // 制造环: 6 指向 3
-    head->next->next->next->next->next->next = head->next->next;
+    tail->next = node3;
 
     // Floyd 判圈
     ListNode* slow = head;

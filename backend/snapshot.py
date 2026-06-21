@@ -52,6 +52,7 @@ def build_snapshot(
 
     # Heap structures — walk data structures if annotations and walker are provided
     heap_structures = _build_heap_structures(annotations, walker, debugger_state,
+                                              step_number=step_number,
                                               selected_vars=selected_vars)
 
     # Candidates: auto-discovered variable names + inferred types,
@@ -87,6 +88,7 @@ def _build_heap_structures(
     walker: MemoryWalker | None,
     debugger_state=None,  # DebuggerState, for auto-discovery
     *,
+    step_number: int = 0,
     selected_vars: list[str] | None = None,  # §v0.8: user-selected var names
 ) -> list[dict]:
     """Build heap_structures from annotations using the MemoryWalker.
@@ -110,8 +112,10 @@ def _build_heap_structures(
         for ann in all_annotations
     )
 
-    # Auto-discover if no struct annotations and we have debugger state
-    if not has_struct and debugger_state:
+    # Auto-discover if no struct annotations and we have debugger state.
+    # Skip on step 1: at the first line of main(), zero user code has executed,
+    # so all local pointer values are uninitialized stack garbage.
+    if not has_struct and debugger_state and step_number > 1:
         discovered = walker.auto_discover(debugger_state.locals)
         # §v0.8: filter auto-discovered annotations by user selection
         if selected_vars is not None:

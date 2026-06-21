@@ -563,11 +563,25 @@ class MemoryWalker:
                 root_names.add(var_name)
                 discovered_types.add(struct_type)
 
-        # Array detection from non-pointer type strings like "int [8]"
+        # Array detection from non-pointer type strings like "int [8]".
+        # Skip primitive-element arrays (int[], char[], float[], …) —
+        # they are usually helper buffers, not algorithmic data structures.
+        # For those, use an explicit @viz array annotation.
+        _PRIMITIVE_ELEM = {
+            'int', 'char', 'float', 'double', 'long', 'short', 'bool',
+            'unsigned int', 'unsigned char', 'unsigned long',
+            'unsigned short', 'unsigned long long', 'long long',
+            'size_t', 'wchar_t',
+        }
         for var in variables:
             type_str = getattr(var, 'type', '')
             m = re.match(r'(.+?)\s*\[(\d+)\]', type_str)
             if m:
+                raw_elem = m.group(1).strip()
+                # strip cv-qualifiers
+                elem = raw_elem.replace('const ', '').replace('volatile ', '').strip()
+                if elem in _PRIMITIVE_ELEM:
+                    continue  # skip int[], char[], etc.
                 annotations.append(Annotation(
                     struct_type="array",
                     name=f"auto_{var_name}",
