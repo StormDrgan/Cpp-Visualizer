@@ -56,11 +56,11 @@ export default function App() {
         borderLeft: '1px solid #e8e8e8',
       }}>
         {/* 可视化画布 — 上部 */}
-        <div style={{ flex: '1 1 55%', overflow: 'hidden', borderBottom: '2px solid #e8e8e8' }}>
+        <div style={{ flex: '1 1 62%', overflow: 'hidden', borderBottom: '2px solid #e8e8e8', minHeight: 220 }}>
           <CanvasArea />
         </div>
         {/* 变量面板 — 下部 */}
-        <div style={{ flex: '1 1 45%', overflow: 'hidden', minHeight: 200 }}>
+        <div style={{ flex: '1 1 38%', overflow: 'hidden', minHeight: 140 }}>
           <VariablePanel />
         </div>
       </div>
