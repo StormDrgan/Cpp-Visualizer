@@ -58,6 +58,11 @@ def build_snapshot(
     # so the front-end can render a checkbox list (§v0.8 click-to-select).
     candidates = _build_candidates(heap_structures)
 
+    # v0.9: generate operation summary from current state
+    operation_summary = debugger_state.current_function or ""
+    if debugger_state.source_line:
+        operation_summary = f"{operation_summary}:{debugger_state.source_line}"
+
     snapshot = {
         "step_number": step_number,
         "source_line": debugger_state.source_line,
@@ -71,6 +76,7 @@ def build_snapshot(
         "stdout": getattr(debugger_state, "stdout", ""),
         "is_terminated": debugger_state.is_terminated,
         "exit_code": debugger_state.exit_code,
+        "operation_summary": operation_summary,
     }
 
     return snapshot
@@ -128,7 +134,11 @@ def _build_heap_structures(
                 next_field=ann.next_field,
                 watched_vars=watched,
             )
-            structures.append(_traversal_to_dict(result))
+            sdict = _traversal_to_dict(result)
+            # v0.9: thread prev_field from annotation
+            if ann.prev_field:
+                sdict["prev_field"] = ann.prev_field
+            structures.append(sdict)
         elif ann.struct_type == "binary_tree":
             result = walker.walk_binary_tree(
                 annotation_name=ann.name,
@@ -137,7 +147,11 @@ def _build_heap_structures(
                 right_field=ann.right_field or "right",
                 watched_vars=watched,
             )
-            structures.append(_traversal_to_dict(result))
+            sdict = _traversal_to_dict(result)
+            # v0.9: thread tree_variant from annotation
+            if ann.tree_variant:
+                sdict["tree_variant"] = ann.tree_variant
+            structures.append(sdict)
         elif ann.struct_type == "array":
             result = walker.walk_array(
                 annotation_name=ann.name,
@@ -201,7 +215,10 @@ def _build_heap_structures(
                 size_var=ann.length_var,
                 watched_vars=watched,
             )
-            structures.append(_traversal_to_dict(result))
+            sdict = _traversal_to_dict(result)
+            # v0.9: compute traversal coloring from watched pointer positions
+            _compute_graph_traversal_colors(sdict, result, watched)
+            structures.append(sdict)
         elif ann.struct_type == "hashmap":
             result = walker.walk_hashmap(
                 annotation_name=ann.name,
@@ -210,6 +227,18 @@ def _build_heap_structures(
                 watched_vars=watched,
             )
             structures.append(_traversal_to_dict(result))
+        elif ann.struct_type == "recursion_tree":
+            # v0.9: recursion tree from call stack
+            if debugger_state:
+                prev_stack = getattr(debugger_state, 'prev_call_stack', None)
+                result = walker.walk_recursion(
+                    annotation_name=ann.name,
+                    call_stack=debugger_state.call_stack,
+                    prev_call_stack=prev_stack,
+                )
+                sdict = _traversal_to_dict(result)
+                sdict["structure_type"] = "recursion_tree"
+                structures.append(sdict)
 
     # Post-process: deduplicate structures with overlapping node address sets
     # and filter out empty structures (null-pointer roots that walked 0 nodes).
@@ -409,3 +438,51 @@ def _traversal_to_dict(result: TraversalResult) -> dict:
         "edges": edges,
         "cycle_detected": result.cycle_detected,
     }
+
+def _compute_graph_traversal_colors(
+    sdict: dict,
+    result,
+    watched_vars: list[str],
+) -> None:
+    """Compute progressive coloring for graph traversal visualization.
+
+    Analyzes watched pointer positions to determine which nodes have been
+    "visited" and assigns gradient colors based on visit order/layer.
+    BFS: light-blue → deep-blue gradient by layer.
+    DFS: light-purple → deep-purple gradient by depth.
+    """
+    if not watched_vars or not result.nodes:
+        return
+
+    nodes = result.nodes
+    traversal_state: dict[str, str] = {}
+
+    # Build a map from watched var name → node addr it points to
+    ptr_to_addr: dict[str, str] = {}
+    for node in nodes:
+        for ptr in node.pointers_pointing_here:
+            ptr_to_addr[ptr] = node.addr
+
+    # Collect visited nodes (those with a watched pointer on them)
+    visited_addrs: list[str] = []
+    visited_order: dict[str, int] = {}
+    for i, node in enumerate(nodes):
+        if node.pointers_pointing_here:
+            visited_addrs.append(node.addr)
+            visited_order[node.addr] = len(visited_order)
+
+    if len(visited_addrs) < 2:
+        return
+
+    # BFS coloring: gradient by visit order (layer-by-layer)
+    for addr in visited_addrs:
+        order = visited_order.get(addr, 0)
+        total = max(len(visited_addrs) - 1, 1)
+        ratio = order / total
+        # Light blue (#bbdefb) → deep blue (#1565c0)
+        r = int(0xbb - (0xbb - 0x15) * ratio)
+        g = int(0xde - (0xde - 0x65) * ratio)
+        b = int(0xfb - (0xfb - 0xc0) * ratio)
+        traversal_state[addr] = f"#{r:02x}{g:02x}{b:02x}"
+
+    sdict["traversal_state"] = traversal_state

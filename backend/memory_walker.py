@@ -489,25 +489,67 @@ class MemoryWalker:
                                 if f.get("is_pointer") and f.get("points_to_same_type")]
 
             if len(same_type_fields) == 2:
-                # Binary tree candidate — prefer left/right naming
                 names = [f["name"] for f in same_type_fields]
-                if "left" in names or "right" in names:
-                    left = next((f["name"] for f in same_type_fields
-                                 if "left" in f["name"]), same_type_fields[0]["name"])
-                    right = next((f["name"] for f in same_type_fields
-                                  if "right" in f["name"]), same_type_fields[1]["name"])
-                else:
-                    left, right = same_type_fields[0]["name"], same_type_fields[1]["name"]
 
-                annotations.append(Annotation(
-                    struct_type="binary_tree",
-                    name=f"auto_{var_name}",
-                    root_var=var_name,
-                    left_field=left,
-                    right_field=right,
-                ))
-                root_names.add(var_name)
-                discovered_types.add(struct_type)
+                # v0.9: Distinguish doubly-linked list from binary tree.
+                # If one field looks like "prev" and the other like "next",
+                # classify as linked_list (doubly), not binary_tree.
+                PREV_PATTERNS = {"prev", "previous", "pre", "last", "backward", "back"}
+                NEXT_PATTERNS = {"next", "succ", "nxt", "link", "forward", "front"}
+                prev_fields = [f for f in same_type_fields if f["name"] in PREV_PATTERNS]
+                next_fields = [f for f in same_type_fields if f["name"] in NEXT_PATTERNS]
+                left_fields = [f for f in same_type_fields if "left" in f["name"]]
+                right_fields = [f for f in same_type_fields if "right" in f["name"]]
+
+                if prev_fields and next_fields:
+                    # Doubly linked list
+                    prev_field = prev_fields[0]["name"]
+                    next_field = next_fields[0]["name"]
+                    annotations.append(Annotation(
+                        struct_type="linked_list",
+                        name=f"auto_{var_name}",
+                        root_var=var_name,
+                        next_field=next_field,
+                        prev_field=prev_field,
+                    ))
+                    root_names.add(var_name)
+                    discovered_types.add(struct_type)
+                elif left_fields or right_fields:
+                    # Binary tree — prefer left/right naming
+                    left = (left_fields[0]["name"] if left_fields
+                            else same_type_fields[0]["name"])
+                    right = (right_fields[0]["name"] if right_fields
+                             else same_type_fields[1]["name"])
+
+                    # v0.9: Check for AVL tree by looking for height/bf fields
+                    avl_fields = [f for f in fields
+                                  if not f.get("is_pointer")
+                                  and f.get("name") in ("height", "bf", "balance_factor", "balance")]
+                    tree_variant = "avl" if avl_fields else ""
+
+                    annotations.append(Annotation(
+                        struct_type="binary_tree",
+                        name=f"auto_{var_name}",
+                        root_var=var_name,
+                        left_field=left,
+                        right_field=right,
+                        tree_variant=tree_variant,
+                    ))
+                    root_names.add(var_name)
+                    discovered_types.add(struct_type)
+                else:
+                    # Ambiguous: 2 same-type pointer fields, no left/right naming,
+                    # no prev/next naming.  Default to binary_tree with ordered fields.
+                    left, right = same_type_fields[0]["name"], same_type_fields[1]["name"]
+                    annotations.append(Annotation(
+                        struct_type="binary_tree",
+                        name=f"auto_{var_name}",
+                        root_var=var_name,
+                        left_field=left,
+                        right_field=right,
+                    ))
+                    root_names.add(var_name)
+                    discovered_types.add(struct_type)
 
             elif len(same_type_fields) == 1:
                 # Linked list candidate — every pointer becomes its own root
@@ -551,3 +593,96 @@ class MemoryWalker:
             ))
 
         return annotations
+
+    def walk_recursion(
+        self,
+        annotation_name: str,
+        call_stack: list,
+        prev_call_stack: list | None = None,
+    ) -> TraversalResult:
+        """Build a recursion tree from the current call stack.
+
+        Each stack frame becomes a tree node. The outermost caller (main)
+        is the root; nested calls are children of their caller.
+
+        This does NOT require LLDB — it operates on the already-available
+        call_stack data from DebuggerState.
+
+        Args:
+            annotation_name: User-given name for the recursion tree.
+            call_stack: List of StackFrame objects (from DebuggerState).
+            prev_call_stack: Previous call stack for detecting new/returned calls.
+
+        Returns:
+            TraversalResult with nodes (one per stack frame) and edges
+            (parent-child relationships).
+        """
+        nodes: list[HeapNode] = []
+        edges: list[TreeEdge] = []
+        root_addr = "0x0"
+
+        if not call_stack:
+            return TraversalResult(
+                annotation_name=annotation_name,
+                structure_type="recursion_tree",
+                root_node_addr=root_addr,
+                nodes=nodes,
+                edges=edges,
+            )
+
+        # Build node ids and track parent relationships.
+        # call_stack[0] is the deepest frame (current function).
+        # call_stack[-1] is the outermost (main).
+        # We build the tree from root (main) down to leaves (deepest calls).
+        prev_ids: set[str] = set()
+        if prev_call_stack:
+            for frame in prev_call_stack:
+                func = getattr(frame, 'function', '')
+                line = getattr(frame, 'line', 0)
+                fid = f"{func}:{line}"
+                prev_ids.add(fid)
+
+        for i, frame in enumerate(reversed(call_stack)):
+            func = getattr(frame, 'function', 'unknown')
+            line = getattr(frame, 'line', 0)
+            fid = f"{func}:{line}"
+            depth = i
+            parent_id = None if i == 0 else nodes[i - 1].addr
+            status = "active"
+            if prev_call_stack and fid in prev_ids:
+                status = "active"  # still in the stack
+            addr = fid
+
+            if i == 0:
+                root_addr = addr
+
+            nodes.append(HeapNode(
+                addr=addr,
+                label=func,
+                fields={
+                    "function": func,
+                    "line": str(line),
+                    "depth": str(depth),
+                    "status": status,
+                },
+            ))
+
+            if parent_id is not None:
+                edges.append(TreeEdge(
+                    from_idx=i - 1,  # parent
+                    to_idx=i,       # child
+                ))
+
+        # Mark returned frames (in prev but not in current)
+        curr_ids = {n.addr for n in nodes}
+        for n in nodes:
+            if n.addr not in curr_ids:
+                n.fields["status"] = "returned"
+
+        return TraversalResult(
+            annotation_name=annotation_name,
+            structure_type="recursion_tree",
+            root_node_addr=root_addr,
+            nodes=nodes,
+            edges=edges,
+        )

@@ -578,6 +578,98 @@ export default function CanvasArea() {
         },
       });
     });
+
+    // ---- Stack/Queue animation: node_pushed — slide in ----
+    for (const action of newActions) {
+      if (action.action !== 'node_pushed') continue;
+      const addr = action.node_addr;
+      const nodeGroup = layer.findOne(`.node-${addr}`);
+      if (!nodeGroup) continue;
+      const detail = action.detail as Record<string, string>;
+      const dir = detail.direction ?? 'top';
+      // Save original position
+      const origX = nodeGroup.x();
+      const origY = nodeGroup.y();
+      // Start from off-screen position
+      if (dir === 'top') {
+        nodeGroup.y(origY - 80);
+      } else {
+        nodeGroup.x(origX + 80);
+      }
+      nodeGroup.scaleX(0.6);
+      nodeGroup.scaleY(0.6);
+      nodeGroup.opacity(0);
+      nodeGroup.to({
+        x: origX,
+        y: origY,
+        scaleX: 1,
+        scaleY: 1,
+        opacity: 1,
+        duration: 0.3,
+        easing: Konva.Easings.EaseOut,
+      });
+    }
+
+    // ---- Stack/Queue animation: node_popped — shrink + fade out ----
+    for (const action of newActions) {
+      if (action.action !== 'node_popped') continue;
+      const addr = action.node_addr;
+      const nodeGroup = layer.findOne(`.node-${addr}`);
+      if (!nodeGroup) continue;
+      nodeGroup.to({
+        scaleX: 0,
+        scaleY: 0,
+        opacity: 0,
+        duration: 0.3,
+        easing: Konva.Easings.EaseIn,
+        onFinish: () => {
+          nodeGroup.visible(false);
+        },
+      });
+    }
+
+    // ---- Heap animation: node_path_swapped — sequential flash along path ----
+    for (const action of newActions) {
+      if (action.action !== 'node_path_swapped') continue;
+      const detail = action.detail as Record<string, unknown>;
+      const pathIndices = detail.path_indices as number[];
+      if (!pathIndices || pathIndices.length < 2) continue;
+
+      // Flash each node in the path sequentially
+      pathIndices.forEach((heapIdx, seqPos) => {
+        const delay = seqPos * 150; // 150ms per step along path
+        setTimeout(() => {
+          const allRects = layer.find('.rect') as Konva.Shape[];
+          // Find rects whose node's fields.index matches heapIdx
+          for (const rect of allRects) {
+            const group = rect.getParent();
+            if (!group) continue;
+            const label = group.findOne('.label') as Konva.Text | null;
+            if (!label) continue;
+            // Check if this node corresponds to the heap index
+            // Look at the index label text `[i]`
+            const indexText = group.findOne('.index-label');
+            if (indexText) continue; // not needed, we use rect addr pattern
+            // Instead, find matching label text
+          }
+          // Simpler approach: flash nodes at position pathIndices[seqPos]
+          // by finding all rect- elements and picking by index
+          const structRects = layer.find('.rect') as Konva.Shape[];
+          // Sort by x position to approximate heap array order
+          const sorted = [...structRects].sort((a, b) => a.x() - b.x());
+          const targetRect = sorted[heapIdx];
+          if (!targetRect) return;
+          const origFill = targetRect.fill();
+          targetRect.to({
+            fill: '#ef6c00',
+            duration: 0.1,
+            onFinish: () => {
+              targetRect.to({ fill: origFill, duration: 0.2 });
+            },
+          });
+        }, delay);
+      });
+    }
   }, [diffActions]);
 
   // ---- Reset animation tracker on step change ----
@@ -696,6 +788,7 @@ export default function CanvasArea() {
             else if (struct.structure_type === 'heap') content = renderHeap(struct, stageSize);
             else if (struct.structure_type === 'graph') content = renderGraph(struct, stageSize);
             else if (struct.structure_type === 'hashmap') content = renderHashmap(struct, stageSize);
+            else if (struct.structure_type === 'recursion_tree') content = renderRecursionTree(struct, stageSize);
             else content = renderLinkedList(struct, stageSize);
             return (
               <Group key={`struct-wrap-${struct.annotation_name}-${idx}`} y={yOff}>
@@ -769,6 +862,7 @@ function renderLinkedList(
         name={`node-${node.addr}`}
       >
         <Rect
+          name={`rect-${node.addr}`}
           x={x} y={y}
           width={NODE_W} height={NODE_H}
           cornerRadius={NODE_RADIUS}
@@ -1125,7 +1219,7 @@ function renderLinkedStack(
 
     elements.push(
       <Group key={`ls-node-${node.addr}`} name={`node-${node.addr}`}>
-        <Rect x={x} y={y} width={NODE_W} height={NODE_H} cornerRadius={NODE_RADIUS}
+        <Rect name={`rect-${node.addr}`} x={x} y={y} width={NODE_W} height={NODE_H} cornerRadius={NODE_RADIUS}
           fill={hasPointers ? '#e3f2fd' : '#fff'}
           stroke={hasPointers ? '#1a73e8' : '#c0c0c0'}
           strokeWidth={hasPointers ? 2 : 1}
@@ -1323,7 +1417,7 @@ function renderLinkedQueue(
 
     elements.push(
       <Group key={`lq-node-${node.addr}`} name={`node-${node.addr}`}>
-        <Rect x={x} y={y} width={NODE_W} height={NODE_H} cornerRadius={NODE_RADIUS}
+        <Rect name={`rect-${node.addr}`} x={x} y={y} width={NODE_W} height={NODE_H} cornerRadius={NODE_RADIUS}
           fill={hasPointers ? '#e3f2fd' : '#fff'}
           stroke={hasPointers ? '#1a73e8' : '#c0c0c0'}
           strokeWidth={hasPointers ? 2 : 1}
@@ -1468,7 +1562,7 @@ function renderHeap(
     elements.push(
       <Group key={`heap-node-${node.addr}`} name={`node-${node.addr}`}
         x={pos.x} y={pos.y}>
-        <Circle radius={TREE_NODE_RADIUS}
+        <Circle name={`rect-${node.addr}`} radius={TREE_NODE_RADIUS}
           fill={hasPointers ? '#e8f5e9' : '#fff'}
           stroke={hasPointers ? '#2e7d32' : '#c0c0c0'}
           strokeWidth={hasPointers ? 2.5 : 1.5}
@@ -1566,7 +1660,7 @@ function renderGraph(
     elements.push(
       <Group key={`graph-node-${node.addr}`} name={`node-${node.addr}`}
         x={pos.x} y={pos.y}>
-        <Circle radius={GRAPH_NODE_RADIUS}
+        <Circle name={`rect-${node.addr}`} radius={GRAPH_NODE_RADIUS}
           fill={hasPointers ? '#e8f5e9' : '#fff'}
           stroke={hasPointers ? '#2e7d32' : '#c0c0c0'}
           strokeWidth={hasPointers ? 2.5 : 1.5}
@@ -1702,7 +1796,7 @@ function renderHashmap(
     chain.forEach((chainNode, ci) => {
       elements.push(
         <Group key={`hmap-chain-${chainNode.addr}`} name={`node-${chainNode.addr}`}>
-          <Rect x={chainNode.x} y={chainNode.y} width={NODE_W} height={NODE_H}
+          <Rect name={`rect-${chainNode.addr}`} x={chainNode.x} y={chainNode.y} width={NODE_W} height={NODE_H}
             cornerRadius={6} fill="#fff" stroke="#c0c0c0" strokeWidth={1}
           />
           <Text name={`label-${chainNode.addr}`}
@@ -1790,6 +1884,7 @@ function renderBinaryTree(
         x={pos.x} y={pos.y}
       >
         <Circle
+          name={`rect-${node.addr}`}
           radius={TREE_NODE_RADIUS}
           fill={hasPointers ? '#e8f5e9' : '#fff'}
           stroke={hasPointers ? '#2e7d32' : '#c0c0c0'}
@@ -1854,6 +1949,105 @@ function renderBinaryTree(
       text={struct.annotation_name}
       x={canvasSize.w / 2 - 30} y={6}
       width={60}
+      fontSize={11} fill="#999" fontStyle="bold" align="center"
+    />
+  );
+
+  return <Group key={struct.annotation_name}>{elements}</Group>;
+}
+
+// ---------------------------------------------------------------------------
+// Recursion Tree rendering (v0.9)
+// ---------------------------------------------------------------------------
+
+function renderRecursionTree(
+  struct: HeapStructure,
+  canvasSize: { w: number; h: number },
+) {
+  const { nodes, edges } = struct;
+  if (!nodes || nodes.length === 0) {
+    return (
+      <Group key={`${struct.annotation_name}-empty`} x={canvasSize.w / 2 - 40} y={canvasSize.h / 2 - 20}>
+        <Rect width={80} height={40} cornerRadius={4} fill="#f5f5f5" stroke="#ccc" strokeWidth={1} />
+        <Text text="EMPTY" x={0} y={0} width={80} height={40} align="center" verticalAlign="middle" fontSize={12} fill="#999" fontStyle="bold" />
+      </Group>
+    );
+  }
+
+  const NODE_W = 120;
+  const NODE_H = 40;
+  const DEPTH_GAP = 70;
+  const X_GAP = 30;
+
+  const elements: React.ReactNode[] = [];
+  const depthMap = new Map<number, { x: number; y: number; addr: string }[]>();
+
+  // Layout: root at top, each depth level below
+  nodes.forEach((node) => {
+    const depth = parseInt((node.fields as Record<string, string>).depth ?? '0');
+    const status = (node.fields as Record<string, string>).status ?? 'active';
+    if (!depthMap.has(depth)) depthMap.set(depth, []);
+    const row = depthMap.get(depth)!;
+    const x = canvasSize.w / 2 - NODE_W / 2 - (nodes.length * (NODE_W + X_GAP)) / 2 + row.length * (NODE_W + X_GAP);
+    const y = 40 + depth * DEPTH_GAP;
+
+    const isActive = status !== 'returned';
+    elements.push(
+      <Group key={`rec-node-${node.addr}`} name={`node-${node.addr}`} x={x} y={y}>
+        <Rect name={`rect-${node.addr}`}
+          width={NODE_W} height={NODE_H}
+          cornerRadius={6}
+          fill={isActive ? '#e8f5e9' : '#f5f5f5'}
+          stroke={isActive ? '#2e7d32' : '#ccc'}
+          strokeWidth={isActive ? 2 : 1}
+          opacity={isActive ? 1 : 0.5}
+        />
+        <Text name={`label-${node.addr}`}
+          text={(node.fields as Record<string, string>).function ?? node.label}
+          x={0} y={0} width={NODE_W} height={NODE_H}
+          align="center" verticalAlign="middle"
+          fontSize={12} fontStyle="bold"
+          fill={isActive ? '#333' : '#999'}
+        />
+      </Group>
+    );
+    row.push({ x, y, addr: node.addr });
+  });
+
+  // Edges: parent -> child arrows
+  if (edges && edges.length > 0) {
+    edges.forEach((edge) => {
+      const parent = nodes[edge.from_idx];
+      const child = nodes[edge.to_idx];
+      if (!parent || !child) return;
+      // Find positions from depth map
+      let parentPos: { x: number; y: number } | null = null;
+      let childPos: { x: number; y: number } | null = null;
+      for (const [, row] of depthMap) {
+        for (const item of row) {
+          if (item.addr === parent.addr) parentPos = item;
+          if (item.addr === child.addr) childPos = item;
+        }
+      }
+      if (!parentPos || !childPos) return;
+      elements.push(
+        <Arrow
+          key={`rec-arrow-${edge.from_idx}-${edge.to_idx}`}
+          points={[
+            parentPos.x + NODE_W / 2, parentPos.y + NODE_H,
+            childPos.x + NODE_W / 2, childPos.y,
+          ]}
+          pointerLength={6} pointerWidth={6}
+          fill="#888" stroke="#888" strokeWidth={1.5}
+        />
+      );
+    });
+  }
+
+  // Structure name
+  elements.push(
+    <Text key="struct-name" text={struct.annotation_name}
+      x={canvasSize.w / 2 - 30} y={4} width={60}
       fontSize={11} fill="#999" fontStyle="bold" align="center"
     />
   );

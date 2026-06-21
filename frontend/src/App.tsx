@@ -5,6 +5,7 @@ import CodeEditor from './components/CodeEditor';
 import CanvasArea from './components/CanvasArea';
 import VariablePanel from './components/VariablePanel';
 import ControlBar from './components/ControlBar';
+import HistoryPanel from './components/HistoryPanel';
 
 /** Thickness of the drag-to-resize divider bars */
 const DIVIDER = 5;
@@ -80,7 +81,7 @@ export default function App() {
         width: '100vw',
         height: '100vh',
         display: 'grid',
-        gridTemplateRows: '44px 1fr 44px',
+        gridTemplateRows: '44px 1fr auto',
         gridTemplateColumns: `${splitX}% ${DIVIDER}px 1fr`,
         overflow: 'hidden',
         fontFamily: '-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif',
@@ -147,6 +148,7 @@ export default function App() {
 
       {/* 底栏 — 跨所有列 */}
       <div style={{ gridColumn: '1 / -1', gridRow: 3 }}>
+        <HistoryPanel />
         <ControlBar />
       </div>
     </div>

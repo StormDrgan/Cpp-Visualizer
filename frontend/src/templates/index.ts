@@ -1,3 +1,5 @@
+import { NEW_TEMPLATES } from './new';
+
 export interface Template {
   id: string;
   label: string;
@@ -7,6 +9,7 @@ export interface Template {
 }
 
 export const TEMPLATES: Template[] = [
+  ...NEW_TEMPLATES,
   {
     id: 'linked_list_reverse',
     label: '链表反转',

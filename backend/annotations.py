@@ -15,7 +15,8 @@ from dataclasses import dataclass, field
 class Annotation:
     """A single parsed @viz annotation."""
     struct_type: str           # "linked_list", "binary_tree", "array", "stack",
-                               # "queue", "heap", "graph", "hashmap", "watch"
+                               # "queue", "heap", "graph", "hashmap", "watch",
+                               # "recursion_tree"
     name: str                  # user-given name for this structure
     root_var: str = ""         # root pointer variable
     next_field: str = ""       # field name for the "next" pointer
@@ -27,6 +28,9 @@ class Annotation:
     rear_var: str = ""         # for queue — index variable tracking the rear
     mode: str = ""             # for hashmap: "chaining" (default) or "open_addressing"
     watched_vars: list[str] = field(default_factory=list)  # for "watch"
+    prev_field: str = ""       # for doubly linked list (v0.9)
+    tree_variant: str = ""     # "avl" | "threaded" | "" (v0.9)
+    is_circular: bool = False  # for circular linked list (v0.9)
 
 
 # Regex patterns
@@ -34,6 +38,13 @@ _LINKED_LIST_RE = re.compile(
     r'@viz\s+linked_list\((\w+)\)'
     r'\s+head=(\w+(?:->\w+)*)'
     r'\.next_field=(\w+)'
+)
+
+_LINKED_LIST_DOUBLY_RE = re.compile(
+    r'@viz\s+linked_list\((\w+)\)'
+    r'\s+head=(\w+(?:->\w+)*)'
+    r'\.next_field=(\w+)'
+    r'\.prev_field=(\w+)'
 )
 
 _BINARY_TREE_RE = re.compile(
@@ -103,6 +114,10 @@ _WATCH_RE = re.compile(
     r'@viz\s+watch\(([^)]+)\)'
 )
 
+_RECURSION_TREE_RE = re.compile(
+    r'@viz\s+recursion_tree\((\w+)\)'
+)
+
 
 def parse_annotations(source_code: str) -> list[Annotation]:
     """Extract all @viz annotations from source code.
@@ -120,6 +135,18 @@ def parse_annotations(source_code: str) -> list[Annotation]:
 
         # Skip non-comment lines
         if not stripped.startswith('//'):
+            continue
+
+        # Try doubly linked_list (with prev_field)
+        m = _LINKED_LIST_DOUBLY_RE.search(stripped)
+        if m:
+            annotations.append(Annotation(
+                struct_type="linked_list",
+                name=m.group(1),
+                root_var=m.group(2),
+                next_field=m.group(3),
+                prev_field=m.group(4),
+            ))
             continue
 
         # Try linked_list
@@ -244,6 +271,15 @@ def parse_annotations(source_code: str) -> list[Annotation]:
                 name=m.group(1),
                 root_var=m.group(2),
                 mode=m.group(3) or "chaining",
+            ))
+            continue
+
+        # Try recursion_tree (v0.9)
+        m = _RECURSION_TREE_RE.search(stripped)
+        if m:
+            annotations.append(Annotation(
+                struct_type="recursion_tree",
+                name=m.group(1),
             ))
             continue
 

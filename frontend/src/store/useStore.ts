@@ -22,6 +22,10 @@ interface Store {
   wsClient: WebSocketClient | null;
   wsConnected: boolean;
 
+  // v0.9: History steps timeline
+  historySteps: { step_number: number; source_line: number }[];
+  jumpToStep: (targetStep: number) => Promise<void>;
+
   createSession: () => Promise<void>;
   connectWs: (sessionId: string) => Promise<void>;
   disconnectWs: () => void;
@@ -61,6 +65,7 @@ export const useStore = create<Store>((set, get) => ({
   activeTemplateId: DEFAULT_TEMPLATE_ID,
   wsClient: null,
   wsConnected: false,
+  historySteps: [],
   selectedVars: new Set<string>(),
   candidates: [],
 
@@ -414,6 +419,7 @@ export const useStore = create<Store>((set, get) => ({
       error: null,
       selectedVars: new Set<string>(),
       candidates: [],
+      historySteps: [],
     });
   },
 
@@ -446,13 +452,44 @@ export const useStore = create<Store>((set, get) => ({
    *  previous step we keep it (so user toggles persist across steps). */
   autoInitSelectedVars: () => {
     const s = get();
-    const candidates = s.snapshot?.candidates ?? [];
+    const snap = s.snapshot;
+    const candidates = snap?.candidates ?? [];
     if (candidates.length === 0) return;
     // If selectedVars is empty, default to all-on
     if (s.selectedVars.size === 0) {
       set({ selectedVars: new Set(candidates.map((c) => c.var_name)) });
     }
+    // v0.9: append step to history
+    if (snap && snap.step_number > 0) {
+      const existing = s.historySteps;
+      const lastStep = existing.length > 0 ? existing[existing.length - 1].step_number : 0;
+      if (snap.step_number > lastStep) {
+        set({
+          historySteps: [...existing, {
+            step_number: snap.step_number,
+            source_line: snap.source_line,
+          }],
+        });
+      }
+    }
     // Always keep candidates in sync for the checkbox list
     set({ candidates });
+  },
+
+  // v0.9: Jump to a specific step in history
+  jumpToStep: async (targetStep: number) => {
+    const curStep = get().snapshot?.step_number ?? 0;
+    if (targetStep === curStep || targetStep < 1) return;
+
+    if (targetStep < curStep) {
+      // Go back
+      await get().back(curStep - targetStep);
+    } else {
+      // Go forward step by step
+      const steps = targetStep - curStep;
+      for (let i = 0; i < steps; i++) {
+        await get().forward();
+      }
+    }
   },
 }));
