@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from config import HOST, PORT
 from routers.session import router as session_router
+from routers.ws import router as ws_router
 from session_manager import session_manager
 
 app = FastAPI(
@@ -30,6 +31,7 @@ app.add_middleware(
 )
 
 app.include_router(session_router)
+app.include_router(ws_router)
 
 
 @app.on_event("shutdown")

@@ -61,7 +61,8 @@ export interface CompileError {
 // ---- Differential animation actions ----
 
 export interface DiffAction {
-  action: 'node_created' | 'node_removed' | 'value_changed' | 'pointer_relocated' | 'no_change';
+  action: 'node_created' | 'node_removed' | 'value_changed' | 'pointer_relocated'
+         | 'no_change' | 'element_compared' | 'element_swapped';
   structure_name: string;
   node_addr: string;
   detail: Record<string, unknown>;

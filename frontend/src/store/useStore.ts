@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { StateSnapshot, CompileError, SessionStatus, DiffAction, Annotation } from '../types';
-import { api } from '../api/client';
+import { api, WebSocketClient } from '../api/client';
 import { TEMPLATES, DEFAULT_TEMPLATE_ID } from '../templates';
 
 interface Store {
@@ -15,7 +15,13 @@ interface Store {
   error: string | null;
   activeTemplateId: string | null;
 
+  // WebSocket
+  wsClient: WebSocketClient | null;
+  wsConnected: boolean;
+
   createSession: () => Promise<void>;
+  connectWs: (sessionId: string) => Promise<void>;
+  disconnectWs: () => void;
   loadCode: (code: string) => Promise<void>;
   step: (mode?: 'step_over' | 'step_into' | 'step_out') => Promise<void>;
   back: (steps?: number) => Promise<void>;
@@ -34,7 +40,7 @@ interface Store {
 const 默认模板 = TEMPLATES.find((t) => t.id === DEFAULT_TEMPLATE_ID) ?? TEMPLATES[0];
 const 默认代码 = 默认模板.code;
 
-// Helper: extract diff_actions from API response if present
+// Helper: extract diff_actions from API/WS response
 function extractDiff(response: { diff_actions?: unknown[] }): DiffAction[] {
   return (response.diff_actions ?? []) as DiffAction[];
 }
@@ -50,6 +56,8 @@ export const useStore = create<Store>((set, get) => ({
   compileErrors: [],
   error: null,
   activeTemplateId: DEFAULT_TEMPLATE_ID,
+  wsClient: null,
+  wsConnected: false,
 
   createSession: async () => {
     try {
@@ -58,6 +66,55 @@ export const useStore = create<Store>((set, get) => ({
     } catch (e: unknown) {
       set({ error: (e as Error).message });
     }
+  },
+
+  connectWs: async (sessionId: string) => {
+    // Disconnect any existing WS
+    get().wsClient?.disconnect();
+
+    const client = new WebSocketClient(sessionId);
+
+    // Register message handlers that update zustand state directly
+    client.on('snapshot', (_payload: unknown, diffActions?: unknown) => {
+      const snap = _payload as StateSnapshot;
+      set({
+        snapshot: snap,
+        diffActions: (diffActions ?? []) as DiffAction[],
+        status: snap.is_terminated ? 'terminated' : 'paused',
+        compileErrors: [],
+        error: null,
+      });
+    });
+
+    client.on('compile_error', (payload: unknown) => {
+      set({
+        status: 'idle',
+        compileErrors: (payload as { errors: CompileError[] }).errors,
+        snapshot: null,
+      });
+    });
+
+    client.on('error', (payload: unknown) => {
+      const msg = (payload as { message: string }).message;
+      set({ error: msg, status: get().snapshot ? 'paused' : 'idle' });
+    });
+
+    client.on('terminated', () => {
+      set({ status: 'terminated' });
+    });
+
+    try {
+      await client.connect();
+      set({ wsClient: client, wsConnected: true });
+    } catch {
+      // WS failed — HTTP fallback will be used automatically
+      set({ wsClient: null, wsConnected: false });
+    }
+  },
+
+  disconnectWs: () => {
+    get().wsClient?.disconnect();
+    set({ wsClient: null, wsConnected: false });
   },
 
   loadCode: async (code: string) => {
@@ -71,6 +128,15 @@ export const useStore = create<Store>((set, get) => ({
 
       const breakpoints = Array.from(get().breakpoints);
       const annotations = get().annotations;
+      const ws = get().wsClient;
+
+      if (ws?.connected) {
+        // WebSocket path — response comes via message handler
+        ws.send('load', { code, breakpoints, annotations: annotations as unknown[] });
+        return;
+      }
+
+      // HTTP fallback
       const response = await api.loadCode(sessionId, code, breakpoints, annotations as unknown[]);
 
       if (response.type === 'compile_error') {
@@ -107,6 +173,15 @@ export const useStore = create<Store>((set, get) => ({
     if (!sessionId) return;
 
     set({ status: 'stepping' });
+
+    const ws = get().wsClient;
+    if (ws?.connected) {
+      ws.send('step', { mode });
+      // Response arrives via 'snapshot' message handler → updates status
+      return;
+    }
+
+    // HTTP fallback
     try {
       const response = await api.step(sessionId, mode);
 
@@ -139,12 +214,20 @@ export const useStore = create<Store>((set, get) => ({
     if (!sessionId) return;
 
     set({ status: 'rewinding' });
+
+    const ws = get().wsClient;
+    if (ws?.connected) {
+      ws.send('back', { steps });
+      return;
+    }
+
     try {
       const response = await api.back(sessionId, steps);
 
       if (response.type === 'snapshot') {
         set({
           snapshot: response.payload as StateSnapshot,
+          diffActions: extractDiff(response),
           status: 'paused',
           error: null,
         });
@@ -159,12 +242,20 @@ export const useStore = create<Store>((set, get) => ({
     if (!sessionId) return;
 
     set({ status: 'stepping' });
+
+    const ws = get().wsClient;
+    if (ws?.connected) {
+      ws.send('forward', {});
+      return;
+    }
+
     try {
       const response = await api.forward(sessionId);
 
       if (response.type === 'snapshot') {
         set({
           snapshot: response.payload as StateSnapshot,
+          diffActions: extractDiff(response),
           status: 'paused',
           error: null,
         });
@@ -179,6 +270,13 @@ export const useStore = create<Store>((set, get) => ({
     if (!sessionId) return;
 
     set({ status: 'running' });
+
+    const ws = get().wsClient;
+    if (ws?.connected) {
+      ws.send('run_to', {});
+      return;
+    }
+
     try {
       const response = await api.runTo(sessionId);
 
@@ -204,6 +302,12 @@ export const useStore = create<Store>((set, get) => ({
   reset: async () => {
     const sessionId = get().sessionId;
     if (!sessionId) return;
+
+    const ws = get().wsClient;
+    if (ws?.connected) {
+      ws.send('reset', {});
+      return;
+    }
 
     try {
       const response = await api.reset(sessionId);
@@ -233,16 +337,25 @@ export const useStore = create<Store>((set, get) => ({
   toggleBreakpoint: async (line: number) => {
     const sessionId = get().sessionId;
     const breakpoints = new Set(get().breakpoints);
+    const ws = get().wsClient;
 
     if (breakpoints.has(line)) {
       breakpoints.delete(line);
       if (sessionId) {
-        try { await api.removeBreakpoint(sessionId, line); } catch { /* ignore */ }
+        if (ws?.connected) {
+          ws.send('remove_breakpoint', { line });
+        } else {
+          try { await api.removeBreakpoint(sessionId, line); } catch { /* ignore */ }
+        }
       }
     } else {
       breakpoints.add(line);
       if (sessionId) {
-        try { await api.setBreakpoint(sessionId, line); } catch { /* ignore */ }
+        if (ws?.connected) {
+          ws.send('set_breakpoint', { line });
+        } else {
+          try { await api.setBreakpoint(sessionId, line); } catch { /* ignore */ }
+        }
       }
     }
 

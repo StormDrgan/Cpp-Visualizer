@@ -50,7 +50,7 @@ def build_snapshot(
         })
 
     # Heap structures — walk data structures if annotations and walker are provided
-    heap_structures = _build_heap_structures(annotations, walker)
+    heap_structures = _build_heap_structures(annotations, walker, debugger_state)
 
     snapshot = {
         "step_number": step_number,
@@ -72,15 +72,36 @@ def build_snapshot(
 def _build_heap_structures(
     annotations: list[Annotation] | None,
     walker: MemoryWalker | None,
+    debugger_state=None,  # DebuggerState, for auto-discovery
 ) -> list[dict]:
-    """Build heap_structures from annotations using the MemoryWalker."""
-    if not annotations or not walker:
+    """Build heap_structures from annotations using the MemoryWalker.
+
+    If no struct-type annotations (linked_list, binary_tree, array) are
+    found, attempts auto-discovery from the debugger state's local variables.
+    Manual @viz annotations always take priority.
+    """
+    if not walker:
         return []
 
-    watched = get_watched_vars(annotations)
+    all_annotations = list(annotations or [])
+
+    # Check if user provided any struct-type annotations
+    has_struct = any(
+        ann.struct_type in ("linked_list", "binary_tree", "array")
+        for ann in all_annotations
+    )
+
+    # Auto-discover if no struct annotations and we have debugger state
+    if not has_struct and debugger_state:
+        discovered = walker.auto_discover(debugger_state.locals)
+        all_annotations.extend(discovered)
+        if discovered:
+            pass  # auto_discover already handles auto-watch
+
+    watched = get_watched_vars(all_annotations)
     structures = []
 
-    for ann in annotations:
+    for ann in all_annotations:
         if ann.struct_type == "linked_list":
             result = walker.walk_linked_list(
                 annotation_name=ann.name,

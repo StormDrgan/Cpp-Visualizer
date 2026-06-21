@@ -62,6 +62,8 @@ def handle_command(cmd: dict, ctx: dict) -> None:
             handle_walk_binary_tree(cmd, ctx)
         elif name == "walk_array":
             handle_walk_array(cmd, ctx)
+        elif name == "inspect_type":
+            handle_inspect_type(cmd, ctx)
         elif name == "terminate":
             handle_terminate(ctx)
             send_response({"ok": True, "result": "terminated"})
@@ -779,6 +781,76 @@ def _build_state(process: lldb.SBProcess, source_file: str, is_terminated: bool 
         "is_terminated": False,
         "exit_code": None,
     }
+
+
+def handle_inspect_type(cmd: dict, ctx: dict) -> None:
+    """Inspect a C++ struct type and return its field layout.
+
+    Used by auto-detection to discover linked-list / binary-tree candidates
+    without manual @viz annotations.
+
+    Command: {"cmd": "inspect_type", "type_name": "ListNode"}
+    Response: {
+        "ok": true,
+        "result": {
+            "type_name": "ListNode",
+            "fields": [
+                {"name": "val", "type": "int", "is_pointer": false, "points_to_same_type": false},
+                {"name": "next", "type": "ListNode *", "is_pointer": true, "points_to_same_type": true}
+            ]
+        }
+    }
+    """
+    type_name = cmd.get("type_name", "")
+    target = ctx.get("target")
+
+    if not target:
+        send_response({"ok": False, "error": "No target"})
+        return
+
+    if not type_name:
+        send_response({"ok": False, "error": "Missing type_name"})
+        return
+
+    # Strip trailing whitespace / pointer asterisk
+    clean_name = type_name.strip()
+    if clean_name.endswith("*") or clean_name.endswith(" *"):
+        clean_name = clean_name.rstrip("*").strip()
+
+    try:
+        sbtype = target.FindFirstType(clean_name)
+        if not sbtype or not sbtype.IsValid():
+            send_response({"ok": False, "error": f"Type not found: {clean_name}"})
+            return
+
+        fields = []
+        for i in range(sbtype.GetNumberOfFields()):
+            field = sbtype.GetFieldAtIndex(i)
+            field_name = field.GetName() or ""
+            field_type = field.GetType()
+            field_type_name = str(field_type.GetName() or "")
+
+            is_pointer = field_type_name.endswith("*") or field_type_name.endswith(" *")
+
+            points_to_same = False
+            if is_pointer:
+                pointee = field_type.GetPointeeType()
+                if pointee and pointee.IsValid():
+                    pointee_name = str(pointee.GetName() or "")
+                    points_to_same = (pointee_name == clean_name)
+
+            fields.append({
+                "name": field_name,
+                "type": field_type_name,
+                "is_pointer": is_pointer,
+                "points_to_same_type": points_to_same,
+            })
+
+        send_response({"ok": True, "result": {"type_name": clean_name, "fields": fields}})
+
+    except Exception as e:
+        log(f"inspect_type error: {e}")
+        send_response({"ok": False, "error": str(e)})
 
 
 def _empty_state(source_file: str, is_terminated: bool = False) -> dict:

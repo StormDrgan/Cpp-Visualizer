@@ -311,6 +311,78 @@ export default function CanvasArea() {
         },
       });
     });
+
+    // ---- Sort animation: element_compared — yellow flash on both rects ----
+    const comparedAddrs = new Set<string>();
+    for (const action of newActions) {
+      if (action.action === 'element_compared') {
+        const addrs = action.node_addr.split(',');
+        addrs.forEach((a) => comparedAddrs.add(a));
+      }
+    }
+    comparedAddrs.forEach((addr) => {
+      const rect = layer.findOne(`.rect-${addr}`) as Konva.Rect | null;
+      if (!rect) return;
+      const origFill = rect.fill();
+      rect.to({
+        fill: '#ffa726',
+        duration: 0.1,
+        onFinish: () => {
+          rect.to({ fill: origFill, duration: 0.2 });
+        },
+      });
+    });
+
+    // ---- Sort animation: element_swapped — orange flash + value transition ----
+    const swappedInfo = new Map<string, { val_a: string; val_b: string }>();
+    for (const action of newActions) {
+      if (action.action === 'element_swapped') {
+        const detail = action.detail as Record<string, string>;
+        swappedInfo.set(detail.node_a, { val_a: detail.val_a, val_b: detail.val_b });
+        swappedInfo.set(detail.node_b, { val_a: detail.val_a, val_b: detail.val_b });
+      }
+    }
+    swappedInfo.forEach((info, addr) => {
+      const rect = layer.findOne(`.rect-${addr}`) as Konva.Rect | null;
+      const label = layer.findOne(`.label-${addr}`) as Konva.Text | null;
+      if (!rect || !label) return;
+      const origFill = rect.fill();
+
+      // Phase 1: orange flash
+      rect.to({
+        fill: '#ef6c00',
+        duration: 0.08,
+        onFinish: () => {
+          // Phase 2: gray out old value
+          label.to({
+            fill: '#bbb', opacity: 0.5,
+            duration: 0.05,
+            onFinish: () => {
+              // Phase 3: update text + green flash
+              const isNodeA = (action: { detail?: Record<string, unknown> }) =>
+                (action.detail as Record<string, string>)?.node_a === addr;
+              // Find which value to show
+              const swapAction = newActions.find(
+                (a) => a.action === 'element_swapped' &&
+                  a.node_addr.includes(addr)
+              );
+              if (swapAction) {
+                const d = swapAction.detail as Record<string, string>;
+                label.text(addr === d.node_a ? d.val_a : d.val_b);
+              }
+              label.to({
+                fill: '#2e7d32', opacity: 1,
+                duration: 0.1,
+                onFinish: () => {
+                  label.to({ fill: '#333', duration: 0.1 });
+                  rect.to({ fill: origFill, duration: 0.15 });
+                },
+              });
+            },
+          });
+        },
+      });
+    });
   }, [diffActions]);
 
   // ---- Reset animation tracker on step change ----
@@ -600,6 +672,7 @@ function renderArray(
         name={`node-${node.addr}`}
       >
         <Rect
+          name={`rect-${node.addr}`}
           x={x} y={y}
           width={ARRAY_CELL_W} height={ARRAY_CELL_H}
           cornerRadius={4}

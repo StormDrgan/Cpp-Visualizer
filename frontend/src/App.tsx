@@ -8,10 +8,23 @@ import ControlBar from './components/ControlBar';
 
 export default function App() {
   const createSession = useStore((s) => s.createSession);
+  const connectWs = useStore((s) => s.connectWs);
+  const disconnectWs = useStore((s) => s.disconnectWs);
+  const sessionId = useStore((s) => s.sessionId);
+  const wsConnected = useStore((s) => s.wsConnected);
 
   useEffect(() => {
     createSession();
-  }, [createSession]);
+    return () => {
+      disconnectWs();
+    };
+  }, [createSession, disconnectWs]);
+
+  useEffect(() => {
+    if (sessionId && !wsConnected) {
+      connectWs(sessionId);
+    }
+  }, [sessionId, wsConnected, connectWs]);
 
   return (
     <div

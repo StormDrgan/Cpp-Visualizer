@@ -1,6 +1,99 @@
-// HTTP client for backend API
+// HTTP client for backend API (also WebSocket client for real-time communication)
 
 const BASE = '/api';
+
+// ---------------------------------------------------------------------------
+// WebSocket client
+// ---------------------------------------------------------------------------
+
+type MessageHandler = (payload: unknown, ...extra: unknown[]) => void;
+
+export class WebSocketClient {
+  private ws: WebSocket | null = null;
+  private sessionId: string;
+  private handlers = new Map<string, MessageHandler[]>();
+  private reconnectAttempts = 0;
+  private maxReconnectAttempts = 5;
+  private reconnectDelay = 1000;
+  public connected = false;
+
+  constructor(sessionId: string) {
+    this.sessionId = sessionId;
+  }
+
+  connect(): Promise<void> {
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const url = `${proto}//${location.host}/ws/${this.sessionId}`;
+
+    return new Promise((resolve, reject) => {
+      this.ws = new WebSocket(url);
+      this.ws.onopen = () => {
+        this.connected = true;
+        this.reconnectAttempts = 0;
+        resolve();
+      };
+      this.ws.onmessage = (event: MessageEvent) => {
+        try {
+          const msg = JSON.parse(event.data as string);
+          const type = msg.type as string;
+          const list = this.handlers.get(type) ?? [];
+          // Always pass payload + diff_actions (if present) for snapshot-type messages
+          for (const h of list) {
+            h(msg.payload, msg.diff_actions);
+          }
+        } catch {
+          // ignore parse errors
+        }
+      };
+      this.ws.onclose = () => {
+        this.connected = false;
+        this.scheduleReconnect();
+      };
+      this.ws.onerror = () => {
+        // onclose fires after onerror; reject only on initial connect
+        if (!this.connected) {
+          reject(new Error('WebSocket connection failed'));
+        }
+      };
+    });
+  }
+
+  send(type: string, payload?: Record<string, unknown>): void {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type, payload: payload ?? {} }));
+    }
+  }
+
+  on(type: string, handler: MessageHandler): void {
+    const list = this.handlers.get(type) ?? [];
+    list.push(handler);
+    this.handlers.set(type, list);
+  }
+
+  off(type: string, handler: MessageHandler): void {
+    const list = this.handlers.get(type) ?? [];
+    this.handlers.set(type, list.filter((h) => h !== handler));
+  }
+
+  disconnect(): void {
+    this.handlers.clear();
+    this.reconnectAttempts = this.maxReconnectAttempts + 1; // prevent reconnect
+    this.ws?.close();
+    this.ws = null;
+    this.connected = false;
+  }
+
+  private scheduleReconnect(): void {
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) return;
+    this.reconnectAttempts++;
+    const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
+    setTimeout(() => this.connect().catch(() => {}), delay);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// HTTP helpers (fallback when WebSocket is not available)
+// ---------------------------------------------------------------------------
 
 async function post<T>(path: string, body?: Record<string, unknown>): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {

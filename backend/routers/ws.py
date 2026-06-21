@@ -1,10 +1,15 @@
-"""Session API routes — see DESIGN.md §3.2 for the API specification."""
+"""WebSocket router — persistent connection for real-time debugger communication.
+
+Replaces HTTP request-response cycles with a single persistent WebSocket
+per session. Both the HTTP router (session.py) and this WS router share
+the same backend/state.py session state.
+"""
 
 from __future__ import annotations
 import os
 import shutil
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from compiler import CodeCompiler
 from config import TEMP_ROOT
@@ -21,59 +26,98 @@ from state import (
     get_breakpoints, store_breakpoints, pop_breakpoints,
     get_annotations, store_annotations, pop_annotations,
     get_prev_structures, store_prev_structures, pop_prev_structures,
+    register_ws, unregister_ws,
     cleanup_session,
 )
 
-router = APIRouter(prefix="/api")
+router = APIRouter()
 
 
 # ---------------------------------------------------------------------------
-# Session lifecycle
+# WebSocket endpoint
 # ---------------------------------------------------------------------------
 
-@router.post("/session")
-async def create_session():
-    """Create a new session. Returns a session_id."""
-    session_id = session_manager.create()
-    store_debugger(session_id, LLDBController())
-    store_compiler(session_id, CodeCompiler())
-    store_breakpoints(session_id, set())
-    store_annotations(session_id, [])
-    store_prev_structures(session_id, [])
-    return {"session_id": session_id}
+@router.websocket("/ws/{session_id}")
+async def ws_session(websocket: WebSocket, session_id: str):
+    """Persistent WebSocket for a single debugger session.
 
-
-@router.post("/session/{session_id}/load")
-async def load_code(session_id: str, body: dict):
-    """Load source code, compile it, and start the debugger.
-
-    Request body:
-        {"code": "...", "breakpoints": [3, 7, ...]}
-
-    Returns:
-        {"success": true, "source_line": 1, ...}
-        or
-        {"success": false, "errors": [...]}
+    Messages from client: {"type": "...", "payload": {...}}
+    Messages from server: {"type": "...", "payload": {...}, "diff_actions": [...]}
     """
+    await websocket.accept()
+    register_ws(session_id, websocket)
+
+    try:
+        while True:
+            msg = await websocket.receive_json()
+            await _dispatch(session_id, websocket, msg)
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        pass
+    finally:
+        unregister_ws(session_id)
+
+
+# ---------------------------------------------------------------------------
+# Message dispatch
+# ---------------------------------------------------------------------------
+
+async def _dispatch(session_id: str, ws: WebSocket, msg: dict) -> None:
+    """Route an incoming message to the appropriate handler."""
+    msg_type = msg.get("type", "")
+    payload = msg.get("payload", {})
+
+    try:
+        if msg_type == "load":
+            await _handle_load(session_id, ws, payload)
+        elif msg_type == "step":
+            await _handle_step(session_id, ws, payload)
+        elif msg_type == "back":
+            await _handle_back(session_id, ws, payload)
+        elif msg_type == "forward":
+            await _handle_forward(session_id, ws, payload)
+        elif msg_type == "run_to":
+            await _handle_run_to(session_id, ws, payload)
+        elif msg_type == "reset":
+            await _handle_reset(session_id, ws, payload)
+        elif msg_type == "set_breakpoint":
+            await _handle_set_breakpoint(session_id, ws, payload)
+        elif msg_type == "remove_breakpoint":
+            await _handle_remove_breakpoint(session_id, ws, payload)
+        elif msg_type == "eval":
+            await _handle_eval(session_id, ws, payload)
+        else:
+            await ws.send_json({"type": "error", "payload": {"message": f"Unknown message type: {msg_type}"}})
+    except Exception as e:
+        await ws.send_json({"type": "error", "payload": {"message": str(e)}})
+
+
+# ---------------------------------------------------------------------------
+# Message handlers
+# ---------------------------------------------------------------------------
+
+async def _handle_load(session_id: str, ws: WebSocket, payload: dict) -> None:
+    """Load source code, compile, start debugger, return first snapshot."""
     session = session_manager.get(session_id)
     if session is None:
-        raise HTTPException(status_code=404, detail="Session not found")
+        await ws.send_json({"type": "error", "payload": {"message": "Session not found"}})
+        return
 
-    code = body.get("code", "")
+    code = payload.get("code", "")
     if not code.strip():
-        raise HTTPException(status_code=400, detail="No source code provided")
+        await ws.send_json({"type": "error", "payload": {"message": "No source code provided"}})
+        return
 
     session.source_code = code
     session.step_number = 0
     session.history.clear()
     session.future.clear()
 
-    # Parse annotations from source code + explicit annotations from frontend
+    # Parse annotations
     code_annotations = parse_annotations(code)
-    explicit = body.get("annotations", [])
+    explicit = payload.get("annotations", [])
 
-    # Merge explicit annotations (from annotation management UI)
-    from dataclasses import asdict
     for item in explicit:
         ann = Annotation(
             struct_type=item.get("struct_type", ""),
@@ -85,13 +129,12 @@ async def load_code(session_id: str, body: dict):
             length_var=item.get("length_var", ""),
             watched_vars=item.get("watched_vars", []),
         )
-        # Avoid duplicates: skip if same name already parsed from code
         if not any(a.name == ann.name and a.struct_type == ann.struct_type for a in code_annotations):
             code_annotations.append(ann)
 
     store_annotations(session_id, code_annotations)
 
-    # Create MemoryWalker (wraps the debugger's send capability)
+    # Create walker
     debugger = get_debugger(session_id)
     store_walker(session_id, MemoryWalker(debugger._send_cmd))
 
@@ -100,27 +143,24 @@ async def load_code(session_id: str, body: dict):
     result = compiler.compile(code, session_id)
 
     if not result.success:
-        return {
+        await ws.send_json({
             "type": "compile_error",
             "payload": {"errors": result.errors},
-        }
+        })
+        return
 
     session.binary_path = result.binary_path
     session.source_file = "main.cpp"
 
-    # Store breakpoints from the request
-    bp_lines = set(body.get("breakpoints", []))
+    bp_lines = set(payload.get("breakpoints", []))
     store_breakpoints(session_id, bp_lines)
 
-    # Start debugger
     try:
         debugger.start(result.binary_path, session.source_file)
 
-        # Set requested breakpoints
         for line in bp_lines:
             debugger.set_breakpoint(line)
 
-        # Get initial state (paused at main)
         state = debugger.get_state()
         session.step_number = 1
         snapshot = build_snapshot(
@@ -133,43 +173,34 @@ async def load_code(session_id: str, body: dict):
 
         session_manager.start_cleanup_timer(session_id)
 
-        return {
+        await ws.send_json({
             "type": "snapshot",
             "payload": snapshot,
-        }
+        })
 
     except RuntimeError as e:
-        return {
+        await ws.send_json({
             "type": "error",
             "payload": {"message": str(e)},
-        }
+        })
 
 
-# ---------------------------------------------------------------------------
-# Execution control
-# ---------------------------------------------------------------------------
-
-@router.post("/session/{session_id}/step")
-async def step(session_id: str, body: dict | None = None):
-    """Execute one step (step_over by default).
-
-    Request body (optional):
-        {"mode": "step_over" | "step_into" | "step_out"}
-
-    Returns the new state snapshot.
-    """
+async def _handle_step(session_id: str, ws: WebSocket, payload: dict) -> None:
+    """Step the debugger and return new snapshot with diff."""
     session = session_manager.get(session_id)
     if session is None:
-        raise HTTPException(status_code=404, detail="Session not found")
+        await ws.send_json({"type": "error", "payload": {"message": "Session not found"}})
+        return
 
     debugger = get_debugger(session_id)
     if not debugger or not debugger.is_running():
-        return {
+        await ws.send_json({
             "type": "terminated",
             "payload": {"message": "Program has already terminated. Reset to run again."},
-        }
+        })
+        return
 
-    mode = (body or {}).get("mode", "step_over")
+    mode = payload.get("mode", "step_over")
 
     try:
         if mode == "step_into":
@@ -185,59 +216,50 @@ async def step(session_id: str, body: dict | None = None):
         walker = get_walker(session_id)
         snapshot = build_snapshot(
             session.step_number, debugger_state, session.source_file,
-            annotations=annotations,
-            walker=walker,
+            annotations=annotations, walker=walker,
         )
 
-        # Compute diff
         curr_structures = snapshot.get("heap_structures", [])
         prev_structures = get_prev_structures(session_id)
         diff_actions = compute_diff(prev_structures, curr_structures, watched_vars=get_watched_vars(annotations))
         store_prev_structures(session_id, curr_structures)
 
-        # Push to history, clear future
         session.history.append(snapshot)
         session.future.clear()
 
         session_manager.start_cleanup_timer(session_id)
 
-        return {
+        await ws.send_json({
             "type": "snapshot",
             "payload": snapshot,
             "diff_actions": [_action_to_dict(a) for a in diff_actions],
-        }
+        })
 
     except Exception as e:
-        return {
+        await ws.send_json({
             "type": "error",
             "payload": {"message": str(e)},
-        }
+        })
 
 
-@router.post("/session/{session_id}/back")
-async def step_back(session_id: str, body: dict | None = None):
-    """Step backward by popping from the history stack.
-
-    Request body (optional):
-        {"steps": 1}  — default 1, can go back multiple steps
-
-    Returns the previous snapshot from history.
-    """
+async def _handle_back(session_id: str, ws: WebSocket, payload: dict) -> None:
+    """Step backward through history."""
     session = session_manager.get(session_id)
     if session is None:
-        raise HTTPException(status_code=404, detail="Session not found")
+        await ws.send_json({"type": "error", "payload": {"message": "Session not found"}})
+        return
 
-    steps = (body or {}).get("steps", 1)
+    steps = payload.get("steps", 1)
 
     if len(session.history) <= 1:
-        return {
+        await ws.send_json({
             "type": "snapshot",
             "payload": session.history[-1] if session.history else None,
-        }
+        })
+        return
 
     for _ in range(steps):
         if len(session.history) > 1:
-            # Move current from history to future
             current = session.history.pop()
             session.future.append(current)
 
@@ -249,25 +271,26 @@ async def step_back(session_id: str, body: dict | None = None):
     diffs = compute_diff(get_prev_structures(session_id), curr, watched_vars=get_watched_vars(anns))
     store_prev_structures(session_id, curr)
 
-    return {
+    await ws.send_json({
         "type": "snapshot",
         "payload": session.history[-1],
         "diff_actions": [_action_to_dict(a) for a in diffs],
-    }
+    })
 
 
-@router.post("/session/{session_id}/forward")
-async def step_forward(session_id: str):
-    """Step forward (redo) — pop from future stack back onto history."""
+async def _handle_forward(session_id: str, ws: WebSocket, payload: dict) -> None:
+    """Step forward (redo) through future stack."""
     session = session_manager.get(session_id)
     if session is None:
-        raise HTTPException(status_code=404, detail="Session not found")
+        await ws.send_json({"type": "error", "payload": {"message": "Session not found"}})
+        return
 
     if not session.future:
-        return {
+        await ws.send_json({
             "type": "snapshot",
             "payload": session.history[-1] if session.history else None,
-        }
+        })
+        return
 
     snapshot = session.future.pop()
     session.history.append(snapshot)
@@ -280,26 +303,27 @@ async def step_forward(session_id: str):
     diffs = compute_diff(get_prev_structures(session_id), curr, watched_vars=get_watched_vars(anns))
     store_prev_structures(session_id, curr)
 
-    return {
+    await ws.send_json({
         "type": "snapshot",
         "payload": snapshot,
         "diff_actions": [_action_to_dict(a) for a in diffs],
-    }
+    })
 
 
-@router.post("/session/{session_id}/run-to")
-async def run_to(session_id: str, body: dict | None = None):
-    """Run until a breakpoint is hit or the program terminates."""
+async def _handle_run_to(session_id: str, ws: WebSocket, payload: dict) -> None:
+    """Run until breakpoint or termination."""
     session = session_manager.get(session_id)
     if session is None:
-        raise HTTPException(status_code=404, detail="Session not found")
+        await ws.send_json({"type": "error", "payload": {"message": "Session not found"}})
+        return
 
     debugger = get_debugger(session_id)
     if not debugger or not debugger.is_running():
-        return {
+        await ws.send_json({
             "type": "terminated",
             "payload": {"message": "Program has already terminated."},
-        }
+        })
+        return
 
     try:
         debugger_state = debugger.run_to_breakpoint()
@@ -322,30 +346,29 @@ async def run_to(session_id: str, body: dict | None = None):
 
         session_manager.start_cleanup_timer(session_id)
 
-        return {
+        await ws.send_json({
             "type": "snapshot",
             "payload": snapshot,
             "diff_actions": [_action_to_dict(a) for a in diff_actions],
-        }
+        })
 
     except Exception as e:
-        return {
+        await ws.send_json({
             "type": "error",
             "payload": {"message": str(e)},
-        }
+        })
 
 
-@router.post("/session/{session_id}/reset")
-async def reset(session_id: str):
-    """Reset the session — kill debugger, clear state, recompile and restart."""
+async def _handle_reset(session_id: str, ws: WebSocket, payload: dict) -> None:
+    """Reset the session — kill debugger, recompile, restart."""
     session = session_manager.get(session_id)
     if session is None:
-        raise HTTPException(status_code=404, detail="Session not found")
+        await ws.send_json({"type": "error", "payload": {"message": "Session not found"}})
+        return
 
     debugger = get_debugger(session_id)
     debugger.terminate()
 
-    # Re-create debugger
     store_debugger(session_id, LLDBController())
     debugger = get_debugger(session_id)
 
@@ -353,22 +376,21 @@ async def reset(session_id: str):
     session.history.clear()
     session.future.clear()
 
-    # Recompile
     compiler = get_compiler(session_id)
     result = compiler.compile(session.source_code, session_id)
 
     if not result.success:
-        return {
+        await ws.send_json({
             "type": "compile_error",
             "payload": {"errors": result.errors},
-        }
+        })
+        return
 
     session.binary_path = result.binary_path
 
     try:
         debugger.start(result.binary_path, session.source_file)
 
-        # Re-apply stored breakpoints
         for line in get_breakpoints(session_id):
             debugger.set_breakpoint(line)
 
@@ -384,77 +406,42 @@ async def reset(session_id: str):
         store_prev_structures(session_id, snapshot.get("heap_structures", []))
         session.history.append(snapshot)
 
-        return {
+        await ws.send_json({
             "type": "snapshot",
             "payload": snapshot,
-        }
+        })
 
     except RuntimeError as e:
-        return {
+        await ws.send_json({
             "type": "error",
             "payload": {"message": str(e)},
-        }
+        })
 
 
-@router.delete("/session/{session_id}")
-async def delete_session(session_id: str):
-    """Clean up a session — kill debugger, remove temp files, delete state."""
-    session = session_manager.get(session_id)
-    if session is None:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    # Kill debugger
-    debugger = pop_debugger(session_id)
-    if debugger:
-        debugger.terminate()
-
-    pop_compiler(session_id)
-    pop_walker(session_id)
-    pop_breakpoints(session_id)
-    pop_annotations(session_id)
-    pop_prev_structures(session_id)
-
-    # Clean up temp files
-    session_dir = os.path.join(TEMP_ROOT, session_id)
-    if os.path.exists(session_dir):
-        shutil.rmtree(session_dir, ignore_errors=True)
-
-    session_manager.delete(session_id)
-
-    return {"status": "deleted", "session_id": session_id}
-
-
-# ---------------------------------------------------------------------------
-# Breakpoints
-# ---------------------------------------------------------------------------
-
-@router.post("/session/{session_id}/set-breakpoint")
-async def set_breakpoint(session_id: str, body: dict):
-    """Set a breakpoint at a given line."""
-    session = session_manager.get(session_id)
-    if session is None:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    line = body.get("line")
+async def _handle_set_breakpoint(session_id: str, ws: WebSocket, payload: dict) -> None:
+    """Set a breakpoint."""
+    line = payload.get("line")
     if line is None:
-        raise HTTPException(status_code=400, detail="Missing 'line' in request body")
+        await ws.send_json({"type": "error", "payload": {"message": "Missing line"}})
+        return
 
     debugger = get_debugger(session_id)
-    debugger.set_breakpoint(line)
+    if debugger:
+        debugger.set_breakpoint(line)
 
     bp_set = get_breakpoints(session_id)
     bp_set.add(line)
     store_breakpoints(session_id, bp_set)
 
-    return {"status": "ok", "line": line}
+    await ws.send_json({"type": "breakpoint_set", "payload": {"line": line}})
 
 
-@router.post("/session/{session_id}/remove-breakpoint")
-async def remove_breakpoint(session_id: str, body: dict):
-    """Remove a breakpoint at a given line."""
-    line = body.get("line")
+async def _handle_remove_breakpoint(session_id: str, ws: WebSocket, payload: dict) -> None:
+    """Remove a breakpoint."""
+    line = payload.get("line")
     if line is None:
-        raise HTTPException(status_code=400, detail="Missing 'line' in request body")
+        await ws.send_json({"type": "error", "payload": {"message": "Missing line"}})
+        return
 
     bp_set = get_breakpoints(session_id)
     bp_set.discard(line)
@@ -463,32 +450,26 @@ async def remove_breakpoint(session_id: str, body: dict):
     if debugger:
         debugger.remove_breakpoint(line)
 
-    return {"status": "ok", "line": line}
+    await ws.send_json({"type": "breakpoint_removed", "payload": {"line": line}})
 
 
-# ---------------------------------------------------------------------------
-# Expression evaluation
-# ---------------------------------------------------------------------------
-
-@router.post("/session/{session_id}/eval")
-async def eval_expression(session_id: str, body: dict):
-    """Evaluate an arbitrary expression in the current frame."""
-    session = session_manager.get(session_id)
-    if session is None:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    expression = body.get("expression", "")
+async def _handle_eval(session_id: str, ws: WebSocket, payload: dict) -> None:
+    """Evaluate an expression."""
+    expression = payload.get("expression", "")
     if not expression:
-        raise HTTPException(status_code=400, detail="Missing 'expression' in request body")
+        await ws.send_json({"type": "error", "payload": {"message": "Missing expression"}})
+        return
 
     debugger = get_debugger(session_id)
-    result = debugger.evaluate(expression)
-
-    return {"expression": expression, "value": result}
+    if debugger:
+        result = debugger.evaluate(expression)
+        await ws.send_json({"type": "eval_result", "payload": {"expression": expression, "value": result}})
+    else:
+        await ws.send_json({"type": "eval_result", "payload": {"expression": expression, "value": ""}})
 
 
 # ---------------------------------------------------------------------------
-# Health
+# Helpers
 # ---------------------------------------------------------------------------
 
 def _action_to_dict(action) -> dict:
@@ -499,8 +480,3 @@ def _action_to_dict(action) -> dict:
         "node_addr": action.node_addr,
         "detail": action.detail,
     }
-
-
-@router.get("/health")
-async def health():
-    return {"status": "ok", "active_sessions": session_manager.active_count}

@@ -279,3 +279,100 @@ class MemoryWalker:
                 if node_index == value:
                     node.pointers_pointing_here.append(var)
                     break
+
+    def auto_discover(self, variables: list) -> list:
+        """Auto-detect data structures from local variable types.
+
+        For each pointer variable: inspect its deref_type, look for fields
+        that point to the same struct type, and classify as linked_list
+        or binary_tree based on field count and naming heuristics.
+        For array variables: detect fixed-size arrays from type strings.
+
+        Args:
+            variables: List of objects with .name, .type, .is_pointer, .deref_type
+                       (typically Variable dataclass instances from debugger.py).
+
+        Returns:
+            List of Annotation objects (imported lazily to avoid circular import).
+        """
+        import re
+        from annotations import Annotation
+
+        annotations: list[Annotation] = []
+        discovered_types: set[str] = set()
+
+        for var in variables:
+            if not getattr(var, 'is_pointer', False) or not getattr(var, 'deref_type', ''):
+                continue
+
+            struct_type = getattr(var, 'deref_type', '')
+            if struct_type in discovered_types:
+                continue
+
+            resp = self._send({"cmd": "inspect_type", "type_name": struct_type})
+            if not resp.get("ok"):
+                continue
+
+            fields = resp.get("result", {}).get("fields", [])
+            same_type_fields = [f for f in fields
+                                if f.get("is_pointer") and f.get("points_to_same_type")]
+
+            if len(same_type_fields) == 2:
+                # Binary tree candidate
+                names = [f["name"] for f in same_type_fields]
+                if "left" in names or "right" in names:
+                    left = next((f["name"] for f in same_type_fields
+                                 if "left" in f["name"]), same_type_fields[0]["name"])
+                    right = next((f["name"] for f in same_type_fields
+                                  if "right" in f["name"]), same_type_fields[1]["name"])
+                else:
+                    left, right = same_type_fields[0]["name"], same_type_fields[1]["name"]
+
+                annotations.append(Annotation(
+                    struct_type="binary_tree",
+                    name=f"auto_{var.name}",
+                    root_var=getattr(var, 'name', ''),
+                    left_field=left,
+                    right_field=right,
+                ))
+                discovered_types.add(struct_type)
+
+            elif len(same_type_fields) == 1:
+                # Linked list candidate
+                next_name = same_type_fields[0]["name"]
+                annotations.append(Annotation(
+                    struct_type="linked_list",
+                    name=f"auto_{var.name}",
+                    root_var=getattr(var, 'name', ''),
+                    next_field=next_name,
+                ))
+                discovered_types.add(struct_type)
+
+        # Array detection from non-pointer type strings like "int [8]"
+        for var in variables:
+            type_str = getattr(var, 'type', '')
+            m = re.match(r'(.+?)\s*\[(\d+)\]', type_str)
+            if m:
+                annotations.append(Annotation(
+                    struct_type="array",
+                    name=f"auto_{var.name}",
+                    root_var=getattr(var, 'name', ''),
+                    length_var=m.group(2),
+                ))
+
+        # Auto-watch: collect other pointer variables of discovered types
+        watched: list[str] = []
+        for var in variables:
+            if getattr(var, 'is_pointer', False) and getattr(var, 'deref_type', ''):
+                dt = getattr(var, 'deref_type', '')
+                if dt in discovered_types and getattr(var, 'name', '') not in [
+                        a.root_var for a in annotations
+                ]:
+                    watched.append(getattr(var, 'name', ''))
+
+        if watched:
+            annotations.append(Annotation(
+                struct_type="watch", name="", watched_vars=watched,
+            ))
+
+        return annotations
