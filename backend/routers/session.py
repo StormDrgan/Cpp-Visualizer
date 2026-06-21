@@ -116,6 +116,13 @@ async def load_code(session_id: str, body: dict):
     bp_lines = set(body.get("breakpoints", []))
     store_breakpoints(session_id, bp_lines)
 
+    # §v0.8: store user-selected visualization targets
+    raw_selected = body.get("selected_vars")
+    if isinstance(raw_selected, list):
+        session.selected_vars = [str(v) for v in raw_selected]
+    else:
+        session.selected_vars = None  # None = select all (auto-discover)
+
     # Start debugger
     try:
         debugger.start(result.binary_path, session.source_file)
@@ -131,6 +138,7 @@ async def load_code(session_id: str, body: dict):
             1, state, session.source_file,
             annotations=code_annotations,
             walker=get_walker(session_id),
+            selected_vars=session.selected_vars,
         )
         store_prev_structures(session_id, snapshot.get("heap_structures", []))
         session.history.append(snapshot)

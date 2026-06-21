@@ -127,8 +127,8 @@ export const api = {
   createSession: () =>
     post<{ session_id: string }>('/session'),
 
-  loadCode: (sessionId: string, code: string, breakpoints: number[] = [], annotations: unknown[] = []) =>
-    post<ApiResponse>(`/session/${sessionId}/load`, { code, breakpoints, annotations }),
+  loadCode: (sessionId: string, code: string, breakpoints: number[] = [], selected_vars: string[] | null = null) =>
+    post<ApiResponse>(`/session/${sessionId}/load`, { code, breakpoints, selected_vars }),
 
   step: (sessionId: string, mode: 'step_over' | 'step_into' | 'step_out' = 'step_over') =>
     post<ApiResponse>(`/session/${sessionId}/step`, { mode }),

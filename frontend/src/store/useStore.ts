@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { StateSnapshot, CompileError, SessionStatus, DiffAction, Annotation } from '../types';
+import type { StateSnapshot, CompileError, SessionStatus, DiffAction, CandidateVar } from '../types';
 import { api, WebSocketClient } from '../api/client';
 import { TEMPLATES, DEFAULT_TEMPLATE_ID } from '../templates';
 
@@ -9,11 +9,14 @@ interface Store {
   code: string;
   snapshot: StateSnapshot | null;
   diffActions: DiffAction[];
-  annotations: Annotation[];
   breakpoints: Set<number>;
   compileErrors: CompileError[];
   error: string | null;
   activeTemplateId: string | null;
+
+  // Visualization target selection (§v0.8)
+  selectedVars: Set<string>;
+  candidates: CandidateVar[];
 
   // WebSocket
   wsClient: WebSocketClient | null;
@@ -31,10 +34,11 @@ interface Store {
   toggleBreakpoint: (line: number) => Promise<void>;
   setCode: (code: string) => void;
   clearError: () => void;
-  addAnnotation: (ann: Annotation) => void;
-  removeAnnotation: (index: number) => void;
-  setAnnotations: (anns: Annotation[]) => void;
   loadTemplate: (templateId: string) => void;
+  toggleVar: (varName: string) => void;
+  selectAllVars: () => void;
+  deselectAllVars: () => void;
+  autoInitSelectedVars: () => void;
 }
 
 const 默认模板 = TEMPLATES.find((t) => t.id === DEFAULT_TEMPLATE_ID) ?? TEMPLATES[0];
@@ -51,13 +55,14 @@ export const useStore = create<Store>((set, get) => ({
   code: 默认代码,
   snapshot: null,
   diffActions: [],
-  annotations: 默认模板.annotations,
   breakpoints: new Set<number>(),
   compileErrors: [],
   error: null,
   activeTemplateId: DEFAULT_TEMPLATE_ID,
   wsClient: null,
   wsConnected: false,
+  selectedVars: new Set<string>(),
+  candidates: [],
 
   createSession: async () => {
     try {
@@ -84,6 +89,8 @@ export const useStore = create<Store>((set, get) => ({
         compileErrors: [],
         error: null,
       });
+      // Auto-populate selectedVars from candidates on first snapshot
+      get().autoInitSelectedVars();
     });
 
     client.on('compile_error', (payload: unknown) => {
@@ -127,17 +134,20 @@ export const useStore = create<Store>((set, get) => ({
       }
 
       const breakpoints = Array.from(get().breakpoints);
-      const annotations = get().annotations;
+      const selectedVars = get().selectedVars;
+      // If selectedVars is empty, send null → backend selects all.
+      // Otherwise send the array of selected variable names.
+      const svPayload = selectedVars.size > 0 ? Array.from(selectedVars) : null;
       const ws = get().wsClient;
 
       if (ws?.connected) {
         // WebSocket path — response comes via message handler
-        ws.send('load', { code, breakpoints, annotations: annotations as unknown[] });
+        ws.send('load', { code, breakpoints, selected_vars: svPayload });
         return;
       }
 
       // HTTP fallback
-      const response = await api.loadCode(sessionId, code, breakpoints, annotations as unknown[]);
+      const response = await api.loadCode(sessionId, code, breakpoints, svPayload);
 
       if (response.type === 'compile_error') {
         set({
@@ -162,6 +172,7 @@ export const useStore = create<Store>((set, get) => ({
           compileErrors: [],
           error: null,
         });
+        get().autoInitSelectedVars();
       }
     } catch (e: unknown) {
       set({ error: (e as Error).message, status: 'idle' });
@@ -203,6 +214,7 @@ export const useStore = create<Store>((set, get) => ({
           status: snap.is_terminated ? 'terminated' : 'paused',
           error: null,
         });
+        get().autoInitSelectedVars();
       }
     } catch (e: unknown) {
       set({ error: (e as Error).message, status: 'paused' });
@@ -231,6 +243,7 @@ export const useStore = create<Store>((set, get) => ({
           status: 'paused',
           error: null,
         });
+        get().autoInitSelectedVars();
       }
     } catch (e: unknown) {
       set({ error: (e as Error).message, status: 'paused' });
@@ -259,6 +272,7 @@ export const useStore = create<Store>((set, get) => ({
           status: 'paused',
           error: null,
         });
+        get().autoInitSelectedVars();
       }
     } catch (e: unknown) {
       set({ error: (e as Error).message, status: 'paused' });
@@ -293,6 +307,7 @@ export const useStore = create<Store>((set, get) => ({
           status: snap.is_terminated ? 'terminated' : 'paused',
           error: null,
         });
+        get().autoInitSelectedVars();
       }
     } catch (e: unknown) {
       set({ error: (e as Error).message, status: 'paused' });
@@ -328,6 +343,7 @@ export const useStore = create<Store>((set, get) => ({
           compileErrors: [],
           error: null,
         });
+        get().autoInitSelectedVars();
       }
     } catch (e: unknown) {
       set({ error: (e as Error).message, status: 'idle' });
@@ -368,20 +384,6 @@ export const useStore = create<Store>((set, get) => ({
 
   clearError: () => set({ error: null, compileErrors: [] }),
 
-  addAnnotation: (ann: Annotation) => {
-    set((s) => ({ annotations: [...s.annotations, ann] }));
-  },
-
-  removeAnnotation: (index: number) => {
-    set((s) => ({
-      annotations: s.annotations.filter((_, i) => i !== index),
-    }));
-  },
-
-  setAnnotations: (anns: Annotation[]) => {
-    set({ annotations: anns });
-  },
-
   loadTemplate: (templateId: string) => {
     const template = TEMPLATES.find((t) => t.id === templateId);
     if (!template) return;
@@ -402,7 +404,6 @@ export const useStore = create<Store>((set, get) => ({
     }
     set({
       code: template.code,
-      annotations: template.annotations,
       activeTemplateId: templateId,
       breakpoints: new Set<number>(),
       // 立即重置可视化区域和状态信息，不等用户点击运行
@@ -411,6 +412,47 @@ export const useStore = create<Store>((set, get) => ({
       diffActions: [],
       compileErrors: [],
       error: null,
+      selectedVars: new Set<string>(),
+      candidates: [],
     });
+  },
+
+  // ---- Visualization target selection (§v0.8) ----
+
+  toggleVar: (varName: string) => {
+    set((s) => {
+      const next = new Set(s.selectedVars);
+      if (next.has(varName)) {
+        next.delete(varName);
+      } else {
+        next.add(varName);
+      }
+      return { selectedVars: next };
+    });
+  },
+
+  selectAllVars: () => {
+    const candidates = get().candidates;
+    set({ selectedVars: new Set(candidates.map((c) => c.var_name)) });
+  },
+
+  deselectAllVars: () => {
+    set({ selectedVars: new Set<string>() });
+  },
+
+  /** Auto-populate selectedVars from the candidates in the current snapshot.
+   *  Called internally when a new snapshot arrives — ensures new variables
+   *  are selected by default.  If selectedVars is already populated from a
+   *  previous step we keep it (so user toggles persist across steps). */
+  autoInitSelectedVars: () => {
+    const s = get();
+    const candidates = s.snapshot?.candidates ?? [];
+    if (candidates.length === 0) return;
+    // If selectedVars is empty, default to all-on
+    if (s.selectedVars.size === 0) {
+      set({ selectedVars: new Set(candidates.map((c) => c.var_name)) });
+    }
+    // Always keep candidates in sync for the checkbox list
+    set({ candidates });
   },
 }));

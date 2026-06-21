@@ -15,6 +15,7 @@ def build_snapshot(
     *,
     annotations: list[Annotation] | None = None,
     walker: MemoryWalker | None = None,
+    selected_vars: list[str] | None = None,  # §v0.8: user-selected variable names
 ) -> dict:
     """Convert a DebuggerState into the frontend StateSnapshot JSON.
 
@@ -50,7 +51,12 @@ def build_snapshot(
         })
 
     # Heap structures — walk data structures if annotations and walker are provided
-    heap_structures = _build_heap_structures(annotations, walker, debugger_state)
+    heap_structures = _build_heap_structures(annotations, walker, debugger_state,
+                                              selected_vars=selected_vars)
+
+    # Candidates: auto-discovered variable names + inferred types,
+    # so the front-end can render a checkbox list (§v0.8 click-to-select).
+    candidates = _build_candidates(heap_structures)
 
     snapshot = {
         "step_number": step_number,
@@ -61,6 +67,7 @@ def build_snapshot(
         "locals": locals_list,
         "watched_expressions": [],
         "heap_structures": heap_structures,
+        "candidates": candidates,
         "stdout": getattr(debugger_state, "stdout", ""),
         "is_terminated": debugger_state.is_terminated,
         "exit_code": debugger_state.exit_code,
@@ -73,12 +80,17 @@ def _build_heap_structures(
     annotations: list[Annotation] | None,
     walker: MemoryWalker | None,
     debugger_state=None,  # DebuggerState, for auto-discovery
+    *,
+    selected_vars: list[str] | None = None,  # §v0.8: user-selected var names
 ) -> list[dict]:
     """Build heap_structures from annotations using the MemoryWalker.
 
     If no struct-type annotations (linked_list, binary_tree, array) are
     found, attempts auto-discovery from the debugger state's local variables.
     Manual @viz annotations always take priority.
+
+    When selected_vars is provided (§v0.8), auto-discovered annotations are
+    filtered to only include those whose root variable is in the list.
     """
     if not walker:
         return []
@@ -95,6 +107,12 @@ def _build_heap_structures(
     # Auto-discover if no struct annotations and we have debugger state
     if not has_struct and debugger_state:
         discovered = walker.auto_discover(debugger_state.locals)
+        # §v0.8: filter auto-discovered annotations by user selection
+        if selected_vars is not None:
+            sv_set = set(selected_vars)
+            discovered = [a for a in discovered
+                          if a.struct_type == "watch"  # always keep watch
+                          or a.root_var in sv_set]
         all_annotations.extend(discovered)
         if discovered:
             pass  # auto_discover already handles auto-watch
@@ -319,6 +337,49 @@ def _collect_labels(struct: dict, labels: dict[str, list[str]]) -> None:
         ptrs = n.get("pointers_pointing_here", [])
         if ptrs:
             labels.setdefault(addr, []).extend(ptrs)
+
+
+def _build_candidates(heap_structures: list[dict]) -> list[dict]:
+    """Extract candidate variable list from built heap_structures.
+
+    Each candidate represents a variable that can be toggled on/off
+    in the front-end's visualization target panel (§v0.8).
+
+    Scans both the primary annotation_name AND merged-in pointer labels
+    from nodes' pointers_pointing_here (added by _dedup_structures when
+    multiple variables point to overlapping node sets).
+    """
+    candidates: list[dict] = []
+    seen: set[str] = set()  # deduplicate by var_name
+
+    def _add(var_name: str, s: dict, root_addr: str = "") -> None:
+        """Add a candidate if not already seen."""
+        nonlocal seen, candidates
+        if not var_name or var_name in seen:
+            return
+        seen.add(var_name)
+        candidates.append({
+            "var_name": var_name,
+            "struct_type": s.get("structure_type", "unknown"),
+            "node_count": len(s.get("nodes", [])),
+            "root_addr": root_addr or s.get("root_node_addr", "0x0"),
+        })
+
+    for s in heap_structures:
+        # Primary root variable name from annotation_name (strip "auto_" prefix)
+        ann_name = s.get("annotation_name", "")
+        primary_var = ann_name.replace("auto_", "")
+        _add(primary_var, s)
+
+        # Also harvest merged-in variable names from nodes' pointer labels.
+        # When _dedup_structures merges structures with overlapping node
+        # sets, it preserves the extra root vars as pointers_pointing_here
+        # on the relevant nodes.  These need to appear as candidates too.
+        for n in s.get("nodes", []):
+            for ptr_name in n.get("pointers_pointing_here", []):
+                _add(ptr_name, s, root_addr=n.get("addr", "0x0"))
+
+    return candidates
 
 
 def _traversal_to_dict(result: TraversalResult) -> dict:

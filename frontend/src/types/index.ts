@@ -46,9 +46,18 @@ export interface StateSnapshot {
   locals: Variable[];
   watched_expressions: { expression: string; value: string }[];
   heap_structures: HeapStructure[];
+  candidates: CandidateVar[];
   stdout: string;
   is_terminated: boolean;
   exit_code: number | null;
+}
+
+/** A variable that can be toggled for visualization (§v0.8). */
+export interface CandidateVar {
+  var_name: string;
+  struct_type: string;
+  node_count: number;
+  root_addr: string;
 }
 
 export interface CompileError {
@@ -66,24 +75,6 @@ export interface DiffAction {
   structure_name: string;
   node_addr: string;
   detail: Record<string, unknown>;
-}
-
-// ---- Annotation (matches backend annotations.py) ----
-
-export interface Annotation {
-  struct_type: 'linked_list' | 'binary_tree' | 'array' | 'stack'
-              | 'queue' | 'heap' | 'graph' | 'hashmap' | 'watch';
-  name: string;
-  root_var: string;
-  next_field: string;
-  left_field: string;
-  right_field: string;
-  length_var?: string;
-  top_var?: string;
-  front_var?: string;
-  rear_var?: string;
-  mode?: string;
-  watched_vars: string[];
 }
 
 // ---- Frontend-only state ----

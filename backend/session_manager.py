@@ -28,6 +28,9 @@ class SessionState:
     history: list[dict] = field(default_factory=list)   # past snapshots
     future: list[dict] = field(default_factory=list)    # undone snapshots (for forward)
 
+    # §v0.8: user-selected visualization targets (variable names)
+    selected_vars: list[str] | None = None
+
     # Timer for auto-cleanup
     _timer: threading.Timer | None = field(default=None, repr=False)
 

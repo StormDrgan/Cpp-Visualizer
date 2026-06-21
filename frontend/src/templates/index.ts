@@ -1,12 +1,9 @@
-import type { Annotation } from '../types';
-
 export interface Template {
   id: string;
   label: string;
   icon: string;
   description: string;
   code: string;
-  annotations: Annotation[];
 }
 
 export const TEMPLATES: Template[] = [
@@ -48,7 +45,6 @@ int main() {
     return 0;
 }
 `,
-    annotations: [],
   },
   {
     id: 'linked_list_middle',
@@ -88,26 +84,6 @@ int main() {
     return 0;
 }
 `,
-    annotations: [
-      {
-        struct_type: 'linked_list',
-        name: 'L',
-        root_var: 'head',
-        next_field: 'next',
-        left_field: '',
-        right_field: '',
-        watched_vars: [],
-      },
-      {
-        struct_type: 'watch',
-        name: '',
-        root_var: '',
-        next_field: '',
-        left_field: '',
-        right_field: '',
-        watched_vars: ['slow', 'fast'],
-      },
-    ],
   },
   {
     id: 'bst_search',
@@ -158,26 +134,6 @@ int main() {
     return 0;
 }
 `,
-    annotations: [
-      {
-        struct_type: 'binary_tree',
-        name: 'T',
-        root_var: 'root',
-        next_field: '',
-        left_field: 'left',
-        right_field: 'right',
-        watched_vars: [],
-      },
-      {
-        struct_type: 'watch',
-        name: '',
-        root_var: '',
-        next_field: '',
-        left_field: '',
-        right_field: '',
-        watched_vars: ['curr'],
-      },
-    ],
   },
   {
     id: 'bubble_sort',
@@ -208,27 +164,6 @@ int main() {
     return 0;
 }
 `,
-    annotations: [
-      {
-        struct_type: 'array',
-        name: 'A',
-        root_var: 'arr',
-        next_field: '',
-        left_field: '',
-        right_field: '',
-        length_var: 'n',
-        watched_vars: [],
-      },
-      {
-        struct_type: 'watch',
-        name: '',
-        root_var: '',
-        next_field: '',
-        left_field: '',
-        right_field: '',
-        watched_vars: ['i', 'j'],
-      },
-    ],
   },
   {
     id: 'binary_search',
@@ -261,27 +196,6 @@ int main() {
     return 0;
 }
 `,
-    annotations: [
-      {
-        struct_type: 'array',
-        name: 'A',
-        root_var: 'arr',
-        next_field: '',
-        left_field: '',
-        right_field: '',
-        length_var: 'n',
-        watched_vars: [],
-      },
-      {
-        struct_type: 'watch',
-        name: '',
-        root_var: '',
-        next_field: '',
-        left_field: '',
-        right_field: '',
-        watched_vars: ['lo', 'hi', 'mid'],
-      },
-    ],
   },
   {
     id: 'bst_insert',
@@ -324,26 +238,6 @@ int main() {
     return 0;
 }
 `,
-    annotations: [
-      {
-        struct_type: 'binary_tree',
-        name: 'T',
-        root_var: 'root',
-        next_field: '',
-        left_field: 'left',
-        right_field: 'right',
-        watched_vars: [],
-      },
-      {
-        struct_type: 'watch',
-        name: '',
-        root_var: '',
-        next_field: '',
-        left_field: '',
-        right_field: '',
-        watched_vars: ['root'],
-      },
-    ],
   },
   {
     id: 'linked_list_cycle',
@@ -393,26 +287,6 @@ int main() {
     return 0;
 }
 `,
-    annotations: [
-      {
-        struct_type: 'linked_list',
-        name: 'L',
-        root_var: 'head',
-        next_field: 'next',
-        left_field: '',
-        right_field: '',
-        watched_vars: [],
-      },
-      {
-        struct_type: 'watch',
-        name: '',
-        root_var: '',
-        next_field: '',
-        left_field: '',
-        right_field: '',
-        watched_vars: ['slow', 'fast'],
-      },
-    ],
   },
   {
     id: 'selection_sort',
@@ -445,27 +319,6 @@ int main() {
     return 0;
 }
 `,
-    annotations: [
-      {
-        struct_type: 'array',
-        name: 'A',
-        root_var: 'arr',
-        next_field: '',
-        left_field: '',
-        right_field: '',
-        length_var: 'n',
-        watched_vars: [],
-      },
-      {
-        struct_type: 'watch',
-        name: '',
-        root_var: '',
-        next_field: '',
-        left_field: '',
-        right_field: '',
-        watched_vars: ['i', 'j', 'minIdx'],
-      },
-    ],
   },
   {
     id: 'stack_sequential',
@@ -500,28 +353,6 @@ int main() {
     return 0;
 }
 `,
-    annotations: [
-      {
-        struct_type: 'stack',
-        name: 'S',
-        root_var: 'arr',
-        next_field: '',
-        left_field: '',
-        right_field: '',
-        length_var: '',
-        top_var: 'top',
-        watched_vars: [],
-      },
-      {
-        struct_type: 'watch',
-        name: '',
-        root_var: '',
-        next_field: '',
-        left_field: '',
-        right_field: '',
-        watched_vars: ['top'],
-      },
-    ],
   },
   {
     id: 'queue_linked',
@@ -570,26 +401,6 @@ int main() {
     return 0;
 }
 `,
-    annotations: [
-      {
-        struct_type: 'queue',
-        name: 'Q',
-        root_var: 'front',
-        next_field: 'next',
-        left_field: '',
-        right_field: '',
-        watched_vars: [],
-      },
-      {
-        struct_type: 'watch',
-        name: '',
-        root_var: '',
-        next_field: '',
-        left_field: '',
-        right_field: '',
-        watched_vars: ['front', 'rear'],
-      },
-    ],
   },
   {
     id: 'max_heap',
@@ -634,27 +445,6 @@ int main() {
     return 0;
 }
 `,
-    annotations: [
-      {
-        struct_type: 'heap',
-        name: 'H',
-        root_var: 'arr',
-        next_field: '',
-        left_field: '',
-        right_field: '',
-        length_var: 'size',
-        watched_vars: [],
-      },
-      {
-        struct_type: 'watch',
-        name: '',
-        root_var: '',
-        next_field: '',
-        left_field: '',
-        right_field: '',
-        watched_vars: ['i', 'j'],
-      },
-    ],
   },
   {
     id: 'graph_adjlist',
@@ -702,28 +492,6 @@ int main() {
     return 0;
 }
 `,
-    annotations: [
-      {
-        struct_type: 'graph',
-        name: 'G',
-        root_var: 'adj',
-        next_field: '',
-        left_field: '',
-        right_field: '',
-        length_var: 'n',
-        mode: 'adjlist',
-        watched_vars: [],
-      },
-      {
-        struct_type: 'watch',
-        name: '',
-        root_var: '',
-        next_field: '',
-        left_field: '',
-        right_field: '',
-        watched_vars: [],
-      },
-    ],
   },
   {
     id: 'hashmap_chaining',
@@ -771,27 +539,6 @@ int main() {
     return 0;
 }
 `,
-    annotations: [
-      {
-        struct_type: 'hashmap',
-        name: 'H',
-        root_var: 'table',
-        next_field: '',
-        left_field: '',
-        right_field: '',
-        mode: 'chaining',
-        watched_vars: [],
-      },
-      {
-        struct_type: 'watch',
-        name: '',
-        root_var: '',
-        next_field: '',
-        left_field: '',
-        right_field: '',
-        watched_vars: ['cur'],
-      },
-    ],
   },
 ];
 

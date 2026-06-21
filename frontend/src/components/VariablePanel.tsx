@@ -1,8 +1,6 @@
 import { useState } from 'react';
 import { useStore } from '../store/useStore';
-import type { Annotation } from '../types';
-
-type AnnotationType = 'linked_list' | 'binary_tree' | 'array' | 'watch';
+import type { CandidateVar } from '../types';
 
 /** Shorten pointer addresses: "0x00005555555592b0 → {val=1}" → "…92b0 → {val=1}" */
 function fmtDisplay(v: { is_pointer: boolean; display_value: string; value: string }): string {
@@ -15,86 +13,51 @@ function fmtDisplay(v: { is_pointer: boolean; display_value: string; value: stri
   });
 }
 
+/** Icon + color per struct type for the checkbox list */
+function candidateIcon(st: string): string {
+  switch (st) {
+    case 'linked_list': return '🔗';
+    case 'binary_tree': return '🌳';
+    case 'array': return '📊';
+    case 'stack': return '📚';
+    case 'queue': return '🚶';
+    case 'heap': return '⛰️';
+    case 'graph': return '🕸️';
+    case 'hashmap': return '#️⃣';
+    default: return '📦';
+  }
+}
+
+function candidateLabel(st: string): string {
+  switch (st) {
+    case 'linked_list': return '链表';
+    case 'binary_tree': return '二叉树';
+    case 'array': return '数组';
+    case 'stack': return '栈';
+    case 'queue': return '队列';
+    case 'heap': return '堆';
+    case 'graph': return '图';
+    case 'hashmap': return '哈希表';
+    default: return st;
+  }
+}
+
 export default function VariablePanel() {
   const snapshot = useStore((s) => s.snapshot);
-  const annotations = useStore((s) => s.annotations);
-  const addAnnotation = useStore((s) => s.addAnnotation);
-  const removeAnnotation = useStore((s) => s.removeAnnotation);
+  const selectedVars = useStore((s) => s.selectedVars);
+  const toggleVar = useStore((s) => s.toggleVar);
+  const selectAllVars = useStore((s) => s.selectAllVars);
+  const deselectAllVars = useStore((s) => s.deselectAllVars);
   const locals = snapshot?.locals ?? [];
   const callStack = snapshot?.call_stack ?? [];
   const stdout = snapshot?.stdout ?? '';
+  const candidates: CandidateVar[] = snapshot?.candidates ?? [];
 
-  // Collapse states — locals + output open by default; call stack + annotations folded
+  // Collapse states — locals + output + targets open by default; call stack folded
   const [showLocals, setShowLocals] = useState(true);
   const [showCallStack, setShowCallStack] = useState(false);
   const [showOutput, setShowOutput] = useState(true);
-  const [showAnnotations, setShowAnnotations] = useState(false);
-  const [annType, setAnnType] = useState<AnnotationType>('linked_list');
-  const [annName, setAnnName] = useState('');
-  const [annRoot, setAnnRoot] = useState('');
-  const [annNext, setAnnNext] = useState('next');
-  const [annLeft, setAnnLeft] = useState('left');
-  const [annRight, setAnnRight] = useState('right');
-  const [annLengthVar, setAnnLengthVar] = useState('');
-  const [annWatchVars, setAnnWatchVars] = useState('');
-
-  const handleAddAnnotation = () => {
-    if (!annName.trim()) return;
-
-    if (annType === 'linked_list') {
-      if (!annRoot.trim()) return;
-      addAnnotation({
-        struct_type: 'linked_list',
-        name: annName.trim(),
-        root_var: annRoot.trim(),
-        next_field: annNext.trim() || 'next',
-        left_field: '',
-        right_field: '',
-        watched_vars: [],
-      });
-    } else if (annType === 'binary_tree') {
-      if (!annRoot.trim()) return;
-      addAnnotation({
-        struct_type: 'binary_tree',
-        name: annName.trim(),
-        root_var: annRoot.trim(),
-        next_field: '',
-        left_field: annLeft.trim() || 'left',
-        right_field: annRight.trim() || 'right',
-        watched_vars: [],
-      });
-    } else if (annType === 'array') {
-      if (!annName.trim() || !annRoot.trim() || !annLengthVar.trim()) return;
-      addAnnotation({
-        struct_type: 'array',
-        name: annName.trim(),
-        root_var: annRoot.trim(),
-        next_field: '',
-        left_field: '',
-        right_field: '',
-        length_var: annLengthVar.trim(),
-        watched_vars: [],
-      });
-    } else {
-      const vars = annWatchVars.split(',').map((v) => v.trim()).filter(Boolean);
-      if (vars.length === 0) return;
-      addAnnotation({
-        struct_type: 'watch',
-        name: '',
-        root_var: '',
-        next_field: '',
-        left_field: '',
-        right_field: '',
-        watched_vars: vars,
-      });
-    }
-
-    // Reset form
-    setAnnName('');
-    setAnnRoot('');
-    setAnnLengthVar('');
-    setAnnWatchVars('');
-  };
+  const [showTargets, setShowTargets] = useState(true);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
@@ -254,6 +217,107 @@ export default function VariablePanel() {
         )}
       </div>
 
+      {/* 可视化目标 — §v0.8 click-to-select checkboxes */}
+      {candidates.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', flexShrink: showTargets ? 0 : undefined }}>
+          <div
+            style={{
+              height: 32, background: '#fafafa',
+              borderTop: '2px solid #e8e8e8',
+              borderBottom: showTargets ? '1px solid #e8e8e8' : 'none',
+              display: 'flex', alignItems: 'center', padding: '0 12px', flexShrink: 0,
+              cursor: 'pointer',
+            }}
+            onClick={() => setShowTargets(!showTargets)}
+          >
+            <span style={{ fontSize: 12, fontWeight: 600, color: '#555' }}>🎯 可视化目标</span>
+            <span
+              style={{
+                fontSize: 10, color: '#999', background: '#e8f5e9',
+                borderRadius: 8, padding: '1px 6px', marginLeft: 6,
+              }}
+            >
+              {selectedVars.size}/{candidates.length}
+            </span>
+            <span style={{ marginLeft: 'auto', fontSize: 10, color: '#ccc', transform: showTargets ? 'rotate(180deg)' : undefined, transition: 'transform 0.2s' }}>
+              ▼
+            </span>
+          </div>
+
+          {showTargets && (
+            <div style={{ maxHeight: 200, overflowY: 'auto', padding: '4px 0' }}>
+              {/* Quick actions */}
+              <div style={{ display: 'flex', gap: 4, padding: '4px 12px', borderBottom: '1px solid #f5f5f5' }}>
+                <button
+                  onClick={selectAllVars}
+                  style={{
+                    flex: 1, padding: '2px 0', fontSize: 10, borderRadius: 3,
+                    border: '1px solid #e8e8e8', background: '#fff', color: '#666',
+                    cursor: 'pointer',
+                  }}
+                >
+                  全选
+                </button>
+                <button
+                  onClick={deselectAllVars}
+                  style={{
+                    flex: 1, padding: '2px 0', fontSize: 10, borderRadius: 3,
+                    border: '1px solid #e8e8e8', background: '#fff', color: '#666',
+                    cursor: 'pointer',
+                  }}
+                >
+                  全不选
+                </button>
+              </div>
+
+              {candidates.map((c) => {
+                const checked = selectedVars.has(c.var_name);
+                return (
+                  <div
+                    key={c.var_name}
+                    onClick={() => toggleVar(c.var_name)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      padding: '5px 12px', cursor: 'pointer',
+                      fontSize: 12, userSelect: 'none',
+                      transition: 'background 0.1s',
+                      opacity: checked ? 1 : 0.5,
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = '#f0f7ff')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    {/* Custom checkbox */}
+                    <span
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        width: 16, height: 16, borderRadius: 3, flexShrink: 0,
+                        border: checked ? 'none' : '1.5px solid #ccc',
+                        background: checked ? '#1a73e8' : '#fff',
+                        color: '#fff', fontSize: 10, fontWeight: 700,
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      {checked ? '✓' : ''}
+                    </span>
+                    <span style={{ fontSize: 14 }}>{candidateIcon(c.struct_type)}</span>
+                    <span style={{
+                      fontFamily: 'SF Mono, Menlo, Monaco, monospace',
+                      color: '#1a73e8', fontWeight: 500,
+                    }}>
+                      {c.var_name}
+                    </span>
+                    <span style={{ color: '#999', fontSize: 10, marginLeft: 'auto' }}>
+                      {candidateLabel(c.struct_type)}
+                      {c.node_count > 0 && <span style={{ marginLeft: 4, color: '#ccc' }}>({c.node_count})</span>}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* 调用栈 */}
       <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', flexShrink: showCallStack ? 0 : undefined }}>
         <div
@@ -316,253 +380,6 @@ export default function VariablePanel() {
         )}
       </div>
 
-      {/* 标注管理 */}
-      <div
-        style={{
-          borderTop: '2px solid #e8e8e8',
-          display: 'flex', flexDirection: 'column',
-          maxHeight: showAnnotations ? '36%' : undefined,
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            height: 32, background: '#fafafa', borderBottom: showAnnotations ? '1px solid #e8e8e8' : 'none',
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '0 12px', flexShrink: 0, cursor: 'pointer',
-          }}
-          onClick={() => setShowAnnotations(!showAnnotations)}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontSize: 12, fontWeight: 600, color: '#555' }}>🏷️ 标注</span>
-            {annotations.length > 0 && (
-              <span
-                style={{
-                  fontSize: 10, color: '#999', background: '#eee',
-                  borderRadius: 8, padding: '1px 6px',
-                }}
-              >
-                {annotations.length}
-              </span>
-            )}
-          </div>
-          <span style={{ fontSize: 10, color: '#ccc', transform: showAnnotations ? 'rotate(180deg)' : undefined, transition: 'transform 0.2s' }}>
-            ▼
-          </span>
-        </div>
-
-        {showAnnotations && (
-          <div style={{ overflowY: 'auto', flex: 1 }}>
-            {/* Existing annotations */}
-            {annotations.length > 0 && (
-              <div style={{ padding: '8px 12px 4px' }}>
-                {annotations.map((ann, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      padding: '4px 8px', marginBottom: 4, borderRadius: 4,
-                      background: '#f5f5f5', fontSize: 11,
-                      fontFamily: 'SF Mono, Menlo, Monaco, monospace',
-                    }}
-                  >
-                    <span>
-                      {ann.struct_type === 'linked_list' ? (
-                        <>
-                          <span style={{ color: '#1a73e8' }}>🔗</span>
-                          {' '}{ann.name}: head={ann.root_var}.next_field={ann.next_field}
-                        </>
-                      ) : ann.struct_type === 'binary_tree' ? (
-                        <>
-                          <span style={{ color: '#2e7d32' }}>🌳</span>
-                          {' '}{ann.name}: root={ann.root_var} ({ann.left_field || 'left'}, {ann.right_field || 'right'})
-                        </>
-                      ) : ann.struct_type === 'array' ? (
-                        <>
-                          <span style={{ color: '#2e7d32' }}>📊</span>
-                          {' '}{ann.name}: var={ann.root_var}.length={ann.length_var ?? '?'}
-                        </>
-                      ) : (
-                        <>
-                          <span style={{ color: '#e65100' }}>👁️</span>
-                          {' watch('}{ann.watched_vars.join(', ')}{')'}
-                        </>
-                      )}
-                    </span>
-                    <button
-                      onClick={() => removeAnnotation(i)}
-                      style={{
-                        border: 'none', background: 'transparent', color: '#ccc',
-                        cursor: 'pointer', fontSize: 14, padding: '0 2px', lineHeight: 1,
-                      }}
-                      title="删除标注"
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Add annotation form */}
-            <div style={{ padding: '8px 12px', borderTop: annotations.length > 0 ? '1px solid #eee' : 'none' }}>
-              <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
-                <button
-                  onClick={() => setAnnType('linked_list')}
-                  style={{
-                    flex: 1, padding: '4px 0', fontSize: 11, borderRadius: 3, border: '1px solid #ddd',
-                    background: annType === 'linked_list' ? '#e3f2fd' : '#fff',
-                    color: annType === 'linked_list' ? '#1a73e8' : '#999',
-                    cursor: 'pointer', fontWeight: annType === 'linked_list' ? 600 : 400,
-                  }}
-                >
-                  🔗 链表
-                </button>
-                <button
-                  onClick={() => setAnnType('binary_tree')}
-                  style={{
-                    flex: 1, padding: '4px 0', fontSize: 11, borderRadius: 3, border: '1px solid #ddd',
-                    background: annType === 'binary_tree' ? '#e8f5e9' : '#fff',
-                    color: annType === 'binary_tree' ? '#2e7d32' : '#999',
-                    cursor: 'pointer', fontWeight: annType === 'binary_tree' ? 600 : 400,
-                  }}
-                >
-                  🌳 二叉树
-                </button>
-                <button
-                  onClick={() => setAnnType('array')}
-                  style={{
-                    flex: 1, padding: '4px 0', fontSize: 11, borderRadius: 3, border: '1px solid #ddd',
-                    background: annType === 'array' ? '#e8f5e9' : '#fff',
-                    color: annType === 'array' ? '#2e7d32' : '#999',
-                    cursor: 'pointer', fontWeight: annType === 'array' ? 600 : 400,
-                  }}
-                >
-                  📊 数组
-                </button>
-                <button
-                  onClick={() => setAnnType('watch')}
-                  style={{
-                    flex: 1, padding: '4px 0', fontSize: 11, borderRadius: 3, border: '1px solid #ddd',
-                    background: annType === 'watch' ? '#fff3e0' : '#fff',
-                    color: annType === 'watch' ? '#e65100' : '#999',
-                    cursor: 'pointer', fontWeight: annType === 'watch' ? 600 : 400,
-                  }}
-                >
-                  👁️ 监视
-                </button>
-              </div>
-
-              {annType === 'linked_list' ? (
-                <>
-                  <input
-                    placeholder="标注名 例如 list1"
-                    value={annName}
-                    onChange={(e) => setAnnName(e.target.value)}
-                    style={inputStyle}
-                  />
-                  <input
-                    placeholder="根变量 例如 head"
-                    value={annRoot}
-                    onChange={(e) => setAnnRoot(e.target.value)}
-                    style={inputStyle}
-                  />
-                  <input
-                    placeholder="next 字段 默认 next"
-                    value={annNext}
-                    onChange={(e) => setAnnNext(e.target.value)}
-                    style={inputStyle}
-                  />
-                </>
-              ) : annType === 'binary_tree' ? (
-                <>
-                  <input
-                    placeholder="标注名 例如 bt"
-                    value={annName}
-                    onChange={(e) => setAnnName(e.target.value)}
-                    style={inputStyle}
-                  />
-                  <input
-                    placeholder="根变量 例如 root"
-                    value={annRoot}
-                    onChange={(e) => setAnnRoot(e.target.value)}
-                    style={inputStyle}
-                  />
-                  <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
-                    <input
-                      placeholder="left 字段"
-                      value={annLeft}
-                      onChange={(e) => setAnnLeft(e.target.value)}
-                      style={{ ...inputStyle, flex: 1, marginBottom: 0 }}
-                    />
-                    <input
-                      placeholder="right 字段"
-                      value={annRight}
-                      onChange={(e) => setAnnRight(e.target.value)}
-                      style={{ ...inputStyle, flex: 1, marginBottom: 0 }}
-                    />
-                  </div>
-                </>
-              ) : annType === 'array' ? (
-                <>
-                  <input
-                    placeholder="标注名 例如 A"
-                    value={annName}
-                    onChange={(e) => setAnnName(e.target.value)}
-                    style={inputStyle}
-                  />
-                  <input
-                    placeholder="数组变量 例如 arr"
-                    value={annRoot}
-                    onChange={(e) => setAnnRoot(e.target.value)}
-                    style={inputStyle}
-                  />
-                  <input
-                    placeholder="长度变量/值 例如 n 或 10"
-                    value={annLengthVar}
-                    onChange={(e) => setAnnLengthVar(e.target.value)}
-                    style={inputStyle}
-                  />
-                </>
-              ) : (
-                <input
-                  placeholder="监视变量 例如 slow, fast"
-                  value={annWatchVars}
-                  onChange={(e) => setAnnWatchVars(e.target.value)}
-                  style={inputStyle}
-                />
-              )}
-
-              <button
-                onClick={handleAddAnnotation}
-                style={{
-                  width: '100%', padding: '5px 0', fontSize: 11, borderRadius: 4,
-                  border: '1px solid #1a73e8', background: '#1a73e8', color: '#fff',
-                  cursor: 'pointer', fontWeight: 600, marginTop: 4,
-                }}
-              >
-                + 添加标注
-              </button>
-
-              <div style={{ fontSize: 10, color: '#ccc', marginTop: 6, textAlign: 'center' }}>
-                添加后需重新编译运行生效
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
     </div>
   );
 }
-
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '4px 8px',
-  fontSize: 11,
-  fontFamily: 'SF Mono, Menlo, Monaco, monospace',
-  border: '1px solid #e8e8e8',
-  borderRadius: 3,
-  marginBottom: 4,
-  outline: 'none',
-  boxSizing: 'border-box',
-};

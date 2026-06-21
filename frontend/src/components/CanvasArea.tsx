@@ -329,6 +329,7 @@ export default function CanvasArea() {
   const snapshot = useStore((s) => s.snapshot);
   const diffActions = useStore((s) => s.diffActions);
   const status = useStore((s) => s.status);
+  const selectedVars = useStore((s) => s.selectedVars);
   const containerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<Konva.Stage>(null);
   const [viewport, setViewport] = useState({ w: 600, h: 320 });
@@ -359,6 +360,40 @@ export default function CanvasArea() {
     [structures],
   );
 
+  // §v0.8: filter by user-selected visualization targets.
+  // Two-level filtering:
+  //  1. Structure-level: show if ANY associated variable is selected
+  //     (primary annotation_name OR merged-in pointers_pointing_here).
+  //  2. Node-level: strip deselected vars from pointers_pointing_here
+  //     so pointer labels for unchecked variables disappear instantly.
+  // If selectedVars is empty (no candidates loaded yet), show all as-is.
+  const visibleStructures = useMemo(
+    () => {
+      if (selectedVars.size === 0) return nonEmptyStructures;
+      return nonEmptyStructures
+        .filter((s) => {
+          const varName = s.annotation_name.replace(/^auto_/, '');
+          if (selectedVars.has(varName)) return true;
+          for (const n of s.nodes) {
+            for (const ptr of (n.pointers_pointing_here ?? [])) {
+              if (selectedVars.has(ptr)) return true;
+            }
+          }
+          return false;
+        })
+        .map((s) => ({
+          ...s,
+          nodes: s.nodes.map((n) => ({
+            ...n,
+            pointers_pointing_here: (n.pointers_pointing_here ?? []).filter(
+              (ptr) => selectedVars.has(ptr),
+            ),
+          })),
+        }));
+    },
+    [nonEmptyStructures, selectedVars],
+  );
+
   // ---- Compute stacked layouts: each structure gets a vertical yOffset ----
   const STRUCT_GAP = 60;
   const layoutCanvas = useMemo(
@@ -369,7 +404,7 @@ export default function CanvasArea() {
   const structLayouts = useMemo(() => {
     let cumY = 0;
     const results: { bounds: ContentBounds; yOffset: number }[] = [];
-    for (const struct of nonEmptyStructures) {
+    for (const struct of visibleStructures) {
       const raw = getStructBounds(struct, layoutCanvas);
       const shifted: ContentBounds = {
         minX: raw.minX,
@@ -381,7 +416,7 @@ export default function CanvasArea() {
       cumY += (raw.maxY - raw.minY) + STRUCT_GAP;
     }
     return results;
-  }, [nonEmptyStructures, layoutCanvas]);
+  }, [visibleStructures, layoutCanvas]);
 
   // ---- Merged total bounds for stage sizing ----
   const totalBounds = useMemo(() => {
@@ -595,7 +630,7 @@ export default function CanvasArea() {
   }, []);
 
   // ---- Empty / terminal states ----
-  if (isIdle || (nonEmptyStructures.length === 0 && !isTerminated)) {
+  if (isIdle || (visibleStructures.length === 0 && !isTerminated)) {
     return (
       <div
         ref={containerRef}
@@ -610,16 +645,16 @@ export default function CanvasArea() {
           <span style={{ fontSize: 24, opacity: 0.4 }}>📐</span>
         </div>
         <div style={{ fontSize: 13, color: '#bbb', marginBottom: 4 }}>
-          可视化画布 — 代码中添加 @viz 标注以启用
+          可视化画布 — 编译运行代码后自动显示
         </div>
         <div style={{ fontSize: 11, color: '#ddd', fontFamily: 'monospace' }}>
-          // @viz linked_list(名称) head=头指针.next_field=next
+          指针变量会被自动检测并可视化
         </div>
       </div>
     );
   }
 
-  if (isTerminated && nonEmptyStructures.length === 0) {
+  if (isTerminated && visibleStructures.length === 0) {
     return (
       <div ref={containerRef} style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f9f9fb' }}>
         <div style={{ textAlign: 'center' }}>
@@ -651,7 +686,7 @@ export default function CanvasArea() {
         scaleX={stageScale} scaleY={stageScale}
       >
         <Layer>
-          {nonEmptyStructures.map((struct, idx) => {
+          {visibleStructures.map((struct, idx) => {
             const yOff = structLayouts[idx]?.yOffset ?? 0;
             let content;
             if (struct.structure_type === 'binary_tree') content = renderBinaryTree(struct, stageSize);

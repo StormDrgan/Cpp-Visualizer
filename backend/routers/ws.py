@@ -159,6 +159,13 @@ async def _handle_load(session_id: str, ws: WebSocket, payload: dict) -> None:
     bp_lines = set(payload.get("breakpoints", []))
     store_breakpoints(session_id, bp_lines)
 
+    # §v0.8: store user-selected visualization targets
+    raw_selected = payload.get("selected_vars")
+    if isinstance(raw_selected, list):
+        session.selected_vars = [str(v) for v in raw_selected]
+    else:
+        session.selected_vars = None  # None = select all (auto-discover)
+
     try:
         debugger.start(result.binary_path, session.source_file)
 
@@ -171,6 +178,7 @@ async def _handle_load(session_id: str, ws: WebSocket, payload: dict) -> None:
             1, state, session.source_file,
             annotations=code_annotations,
             walker=get_walker(session_id),
+            selected_vars=session.selected_vars,
         )
         store_prev_structures(session_id, snapshot.get("heap_structures", []))
         session.history.append(snapshot)
@@ -221,6 +229,7 @@ async def _handle_step(session_id: str, ws: WebSocket, payload: dict) -> None:
         snapshot = build_snapshot(
             session.step_number, debugger_state, session.source_file,
             annotations=annotations, walker=walker,
+            selected_vars=session.selected_vars,
         )
 
         curr_structures = snapshot.get("heap_structures", [])
@@ -338,6 +347,7 @@ async def _handle_run_to(session_id: str, ws: WebSocket, payload: dict) -> None:
         snapshot = build_snapshot(
             session.step_number, debugger_state, session.source_file,
             annotations=annotations, walker=walker,
+            selected_vars=session.selected_vars,
         )
 
         curr_structures = snapshot.get("heap_structures", [])
@@ -406,6 +416,7 @@ async def _handle_reset(session_id: str, ws: WebSocket, payload: dict) -> None:
         snapshot = build_snapshot(
             1, state, session.source_file,
             annotations=annotations, walker=walker,
+            selected_vars=session.selected_vars,
         )
         store_prev_structures(session_id, snapshot.get("heap_structures", []))
         session.history.append(snapshot)
