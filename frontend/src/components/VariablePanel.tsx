@@ -4,6 +4,17 @@ import type { Annotation } from '../types';
 
 type AnnotationType = 'linked_list' | 'binary_tree' | 'array' | 'watch';
 
+/** Shorten pointer addresses: "0x00005555555592b0 → {val=1}" → "…92b0 → {val=1}" */
+function fmtDisplay(v: { is_pointer: boolean; display_value: string; value: string }): string {
+  const raw = v.display_value || v.value;
+  if (!v.is_pointer) return raw;
+  // Shorten full hex address to last 4 digits for display
+  return raw.replace(/0x[0-9a-fA-F]+/, (addr) => {
+    if (addr.length > 8) return '…' + addr.slice(-4);
+    return addr;
+  });
+}
+
 export default function VariablePanel() {
   const snapshot = useStore((s) => s.snapshot);
   const annotations = useStore((s) => s.annotations);
@@ -162,12 +173,12 @@ export default function VariablePanel() {
                         fontFamily: 'SF Mono, Menlo, Monaco, monospace',
                         color: v.is_pointer ? '#e65100' : '#2e7d32',
                         textAlign: 'center', fontWeight: v.is_pointer ? 500 : 400,
-                        maxWidth: 180, overflow: 'hidden',
+                        maxWidth: 200, overflow: 'hidden',
                         textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                       }}
-                      title={v.display_value || v.value}
+                      title={(v.display_value || v.value) + (v.is_pointer ? '' : '')}
                     >
-                      {v.display_value || v.value}
+                      {fmtDisplay(v)}
                     </td>
                   </tr>
                 ))}

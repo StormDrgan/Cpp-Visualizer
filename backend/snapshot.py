@@ -193,7 +193,132 @@ def _build_heap_structures(
             )
             structures.append(_traversal_to_dict(result))
 
+    # Post-process: deduplicate structures with overlapping node address sets
+    # and filter out empty structures (null-pointer roots that walked 0 nodes).
+    structures = _dedup_structures(structures)
+
     return structures
+
+
+def _dedup_structures(structures: list[dict]) -> list[dict]:
+    """Deduplicate structures by node address set.
+
+    Structures with identical node address sets are merged: the first one
+    is kept as the primary, and additional root variables (extracted from
+    annotation_name) are added as pointer labels on the root nodes.
+
+    Subset structures are merged into their superset.
+
+    Structures with zero nodes (null-pointer walk results) are dropped.
+    """
+    if len(structures) <= 1:
+        return [s for s in structures if len(s.get("nodes", [])) > 0]
+
+    # Only dedup linked_list and binary_tree — array/stack/queue/graph/hashmap
+    # have different semantics (index-based, not address-based).
+    DEDUP_TYPES = {"linked_list", "binary_tree"}
+
+    # Separate structures into dedup-eligible and pass-through
+    eligible: list[dict] = []
+    passthrough: list[dict] = []
+
+    for s in structures:
+        if s.get("structure_type") in DEDUP_TYPES:
+            eligible.append(s)
+        else:
+            passthrough.append(s)
+
+    if len(eligible) <= 1:
+        # Still filter empty
+        eligible = [s for s in eligible if len(s.get("nodes", [])) > 0]
+        return eligible + passthrough
+
+    # Build node address frozensets for each eligible structure
+    struct_sets: list[tuple[dict, frozenset, int]] = []  # (struct, frozenset, original_index)
+    for i, s in enumerate(eligible):
+        addrs = frozenset(n["addr"] for n in s.get("nodes", []))
+        struct_sets.append((s, addrs, i))
+
+    # Sort by set size descending so supersets process first;
+    # this way subsets naturally merge into their superset.
+    struct_sets.sort(key=lambda x: len(x[1]), reverse=True)
+
+    merged: list[dict] = []
+    consumed: set[int] = set()
+
+    for i, (s_i, set_i, _orig_i) in enumerate(struct_sets):
+        if i in consumed:
+            continue
+
+        nodes_i = s_i.get("nodes", [])
+        if len(nodes_i) == 0:
+            consumed.add(i)
+            continue
+
+        # Collect pointer labels from structures that merge into this one
+        extra_labels: dict[str, list[str]] = {}  # addr → [var_names]
+
+        for j, (s_j, set_j, _orig_j) in enumerate(struct_sets):
+            if j == i or j in consumed:
+                continue
+            if not set_j:
+                consumed.add(j)
+                continue
+
+            if set_j == set_i:
+                # Exact match → merge s_j into s_i
+                _collect_labels(s_j, extra_labels)
+                consumed.add(j)
+            elif set_j.issubset(set_i):
+                # Subset → merge s_j into s_i
+                _collect_labels(s_j, extra_labels)
+                consumed.add(j)
+
+        # Add the primary structure's own root as a pointer label on the root node
+        own_root = s_i.get("annotation_name", "").replace("auto_", "")
+        own_root_addr = s_i.get("root_node_addr", "0x0")
+        if own_root and own_root_addr and own_root_addr != "0x0":
+            extra_labels.setdefault(own_root_addr, []).append(own_root)
+
+        # Apply collected pointer labels to s_i's nodes
+        if extra_labels:
+            for n in s_i.get("nodes", []):
+                addr = n["addr"]
+                extra = extra_labels.get(addr, [])
+                if extra:
+                    existing = list(n.get("pointers_pointing_here", []))
+                    for p in extra:
+                        if p not in existing:
+                            existing.append(p)
+                    n["pointers_pointing_here"] = existing
+
+        merged.append(s_i)
+        consumed.add(i)
+
+    return merged + passthrough
+
+
+def _collect_labels(struct: dict, labels: dict[str, list[str]]) -> None:
+    """Collect pointer labels from a structure that is being merged away.
+
+    Extracts:
+    - The structure's root variable name (from annotation_name, stripping "auto_")
+    - All pointers_pointing_here from its nodes
+    """
+    # Root variable name
+    ann_name = struct.get("annotation_name", "")
+    root_var = ann_name.replace("auto_", "")
+
+    root_addr = struct.get("root_node_addr", "0x0")
+    if root_addr and root_addr != "0x0" and root_var:
+        labels.setdefault(root_addr, []).append(root_var)
+
+    # Pointers pointing to individual nodes
+    for n in struct.get("nodes", []):
+        addr = n["addr"]
+        ptrs = n.get("pointers_pointing_here", [])
+        if ptrs:
+            labels.setdefault(addr, []).extend(ptrs)
 
 
 def _traversal_to_dict(result: TraversalResult) -> dict:

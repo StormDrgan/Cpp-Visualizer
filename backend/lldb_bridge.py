@@ -730,8 +730,8 @@ def _build_state(process: lldb.SBProcess, source_file: str, is_terminated: bool 
                 deref_type = str(deref_val.GetTypeName() or type_name.replace("*", "").strip())
                 deref_summary = deref_val.GetSummary()
                 if deref_summary:
-                    # Don't show raw address — just the pointed-to value
-                    display_value = str(deref_summary).strip('"')
+                    # Show address + pointed-to value: "0x92b0 → summary"
+                    deref_display = str(deref_summary).strip('"')
                 else:
                     # Custom structs (e.g., ListNode) don't have LLDB formatters
                     # Build summary from child members; skip pointer fields
@@ -751,7 +751,17 @@ def _build_state(process: lldb.SBProcess, source_file: str, is_terminated: bool 
                                 cval = str(cval).strip('"')
                                 children_parts.append(f"{cname}={cval}")
                     if children_parts:
-                        display_value = f"{{{', '.join(children_parts)}}}"
+                        deref_display = f"{{{', '.join(children_parts)}}}"
+                    else:
+                        deref_display = ""
+                # Format: "0x… → {val=1}" for pointers, showing both address and deref
+                if deref_display:
+                    display_value = f"{raw_value} → {deref_display}"
+                else:
+                    display_value = raw_value  # just the address if nothing to show
+            else:
+                # Dereference failed — just show raw address
+                display_value = raw_value
 
         locals_list.append({
             "name": str(name),

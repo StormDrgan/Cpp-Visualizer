@@ -18,8 +18,7 @@ export const TEMPLATES: Template[] = [
     code: `#include <iostream>
 using namespace std;
 
-// @viz linked_list(L) head=head.next_field=next
-// @viz watch(curr, prev)
+// 链表反转 — auto_discover 自动检测所有 ListNode* 指针变量
 struct ListNode {
     int val;
     ListNode* next;
@@ -49,26 +48,7 @@ int main() {
     return 0;
 }
 `,
-    annotations: [
-      {
-        struct_type: 'linked_list',
-        name: 'L',
-        root_var: 'head',
-        next_field: 'next',
-        left_field: '',
-        right_field: '',
-        watched_vars: [],
-      },
-      {
-        struct_type: 'watch',
-        name: '',
-        root_var: '',
-        next_field: '',
-        left_field: '',
-        right_field: '',
-        watched_vars: ['curr', 'prev'],
-      },
-    ],
+    annotations: [],
   },
   {
     id: 'linked_list_middle',

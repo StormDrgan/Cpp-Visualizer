@@ -277,6 +277,54 @@ function mergeBounds(all: ContentBounds[]): ContentBounds {
   };
 }
 
+// ---- Get bounds for a single structure (null-safe) ----
+function getStructBounds(struct: HeapStructure, canvasSize: { w: number; h: number }): ContentBounds {
+  const hasNext = struct.nodes.some(
+    (n) => typeof (n.fields as Record<string, string>)?.next === 'string',
+  );
+  const type = struct.structure_type;
+  const emptyBounds: ContentBounds = { minX: 0, maxX: 150, minY: 0, maxY: 60 };
+
+  if (type === 'binary_tree' || type === 'heap') {
+    const layout = getBinaryTreeLayout(struct, canvasSize);
+    return layout?.bounds ?? emptyBounds;
+  }
+  if (type === 'array') {
+    const layout = getArrayLayout(struct, canvasSize);
+    return layout?.bounds ?? emptyBounds;
+  }
+  if (type === 'stack' && !hasNext) {
+    const layout = getStackLayout(struct, canvasSize);
+    return layout?.bounds ?? emptyBounds;
+  }
+  if (type === 'queue' && !hasNext) {
+    const layout = getQueueLayout(struct, canvasSize);
+    return layout?.bounds ?? emptyBounds;
+  }
+  if (type === 'queue' || type === 'stack') {
+    const layout = getLinkedListLayout(struct, canvasSize);
+    return layout?.bounds ?? emptyBounds;
+  }
+  if (type === 'graph') {
+    const n = struct.nodes.length;
+    if (n === 0) return emptyBounds;
+    return { minX: 20, maxX: 20 + n * 100 + 100, minY: 20, maxY: 20 + n * 70 + 100 };
+  }
+  if (type === 'hashmap') {
+    const n = struct.nodes.length;
+    if (n === 0) return emptyBounds;
+    return {
+      minX: 20,
+      maxX: 20 + n * (HMAP_BUCKET_W + 8) + HMAP_CHAIN_GAP * 3 + 100,
+      minY: 20,
+      maxY: 20 + 200 + 100,
+    };
+  }
+  // linked_list (default)
+  const layout = getLinkedListLayout(struct, canvasSize);
+  return layout?.bounds ?? emptyBounds;
+}
+
 export default function CanvasArea() {
   const snapshot = useStore((s) => s.snapshot);
   const diffActions = useStore((s) => s.diffActions);
@@ -297,52 +345,41 @@ export default function CanvasArea() {
   const isTerminated = status === 'terminated';
   const structures = snapshot?.heap_structures ?? [];
 
-  // ---- Compute content bounds from all structures ----
-  const totalBounds = useMemo(() => {
-    const all: ContentBounds[] = [];
-    // Use a large canvas size for layout calculation so centering logic
-    // doesn't artificially constrain long lists
-    const layoutCanvas = { w: Math.max(viewport.w, 2000), h: Math.max(viewport.h, 1200) };
-    for (const struct of structures) {
-      if (struct.structure_type === 'binary_tree' || struct.structure_type === 'heap') {
-        const layout = getBinaryTreeLayout(struct, layoutCanvas);
-        if (layout) all.push(layout.bounds);
-      } else if (struct.structure_type === 'array') {
-        const layout = getArrayLayout(struct, layoutCanvas);
-        if (layout) all.push(layout.bounds);
-      } else if (struct.structure_type === 'stack' && !struct.nodes.some(n => (n.fields as Record<string, string>)?.next)) {
-        // Sequential stack (array-based, no next field)
-        const layout = getStackLayout(struct, layoutCanvas);
-        if (layout) all.push(layout.bounds);
-      } else if (struct.structure_type === 'queue' && !struct.nodes.some(n => (n.fields as Record<string, string>)?.next)) {
-        // Circular queue (array-based, no next field)
-        const layout = getQueueLayout(struct, layoutCanvas);
-        if (layout) all.push(layout.bounds);
-      } else if (struct.structure_type === 'queue' || struct.structure_type === 'stack') {
-        // Linked stack/queue — reuse linked list layout
-        const layout = getLinkedListLayout(struct, layoutCanvas);
-        if (layout) all.push(layout.bounds);
-      } else if (struct.structure_type === 'graph') {
-        // Graph: rough estimate based on node count
-        const nodeCount = struct.nodes.length;
-        all.push({
-          minX: 20, maxX: 20 + nodeCount * 100 + 100,
-          minY: 20, maxY: 20 + nodeCount * 70 + 100,
-        });
-      } else if (struct.structure_type === 'hashmap') {
-        // Hashmap: array of buckets + chains
-        const nodeCount = struct.nodes.length;
-        all.push({
-          minX: 20, maxX: 20 + nodeCount * (HMAP_BUCKET_W + 8) + HMAP_CHAIN_GAP * 3 + 100,
-          minY: 20, maxY: 20 + 200 + 100,
-        });
-      } else {
-        const layout = getLinkedListLayout(struct, layoutCanvas);
-        if (layout) all.push(layout.bounds);
-      }
+  // Filter out empty structures (null-pointer roots, empty arrays)
+  const nonEmptyStructures = useMemo(
+    () => structures.filter((s) => s.nodes.length > 0),
+    [structures],
+  );
+
+  // ---- Compute stacked layouts: each structure gets a vertical yOffset ----
+  const STRUCT_GAP = 60;
+  const layoutCanvas = useMemo(
+    () => ({ w: Math.max(viewport.w, 2000), h: Math.max(viewport.h, 1200) }),
+    [viewport],
+  );
+
+  const structLayouts = useMemo(() => {
+    let cumY = 0;
+    const results: { bounds: ContentBounds; yOffset: number }[] = [];
+    for (const struct of nonEmptyStructures) {
+      const raw = getStructBounds(struct, layoutCanvas);
+      const shifted: ContentBounds = {
+        minX: raw.minX,
+        maxX: raw.maxX,
+        minY: raw.minY + cumY,
+        maxY: raw.maxY + cumY,
+      };
+      results.push({ bounds: shifted, yOffset: cumY });
+      cumY += (raw.maxY - raw.minY) + STRUCT_GAP;
     }
-    return mergeBounds(all);
-  }, [structures, viewport]);
+    return results;
+  }, [nonEmptyStructures, layoutCanvas]);
+
+  // ---- Merged total bounds for stage sizing ----
+  const totalBounds = useMemo(() => {
+    if (structLayouts.length === 0) return { minX: 0, maxX: 100, minY: 0, maxY: 100 };
+    return mergeBounds(structLayouts.map((l) => l.bounds));
+  }, [structLayouts]);
 
   // ---- Stage dimensions: accommodate scaled content or fill viewport ----
   const contentW = totalBounds.maxX - totalBounds.minX;
@@ -559,7 +596,7 @@ export default function CanvasArea() {
   }, [stageScale]);
 
   // ---- Empty / terminal states ----
-  if (isIdle || (structures.length === 0 && !isTerminated)) {
+  if (isIdle || (nonEmptyStructures.length === 0 && !isTerminated)) {
     return (
       <div
         ref={containerRef}
@@ -583,7 +620,7 @@ export default function CanvasArea() {
     );
   }
 
-  if (isTerminated && structures.length === 0) {
+  if (isTerminated && nonEmptyStructures.length === 0) {
     return (
       <div ref={containerRef} style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f9f9fb' }}>
         <div style={{ textAlign: 'center' }}>
@@ -612,15 +649,22 @@ export default function CanvasArea() {
         scaleX={stageScale} scaleY={stageScale}
       >
         <Layer>
-          {structures.map((struct) => {
-            if (struct.structure_type === 'binary_tree') return renderBinaryTree(struct, stageSize);
-            if (struct.structure_type === 'array') return renderArray(struct, stageSize);
-            if (struct.structure_type === 'stack') return renderStack(struct, stageSize);
-            if (struct.structure_type === 'queue') return renderQueue(struct, stageSize);
-            if (struct.structure_type === 'heap') return renderHeap(struct, stageSize);
-            if (struct.structure_type === 'graph') return renderGraph(struct, stageSize);
-            if (struct.structure_type === 'hashmap') return renderHashmap(struct, stageSize);
-            return renderLinkedList(struct, stageSize);
+          {nonEmptyStructures.map((struct, idx) => {
+            const yOff = structLayouts[idx]?.yOffset ?? 0;
+            let content;
+            if (struct.structure_type === 'binary_tree') content = renderBinaryTree(struct, stageSize);
+            else if (struct.structure_type === 'array') content = renderArray(struct, stageSize);
+            else if (struct.structure_type === 'stack') content = renderStack(struct, stageSize);
+            else if (struct.structure_type === 'queue') content = renderQueue(struct, stageSize);
+            else if (struct.structure_type === 'heap') content = renderHeap(struct, stageSize);
+            else if (struct.structure_type === 'graph') content = renderGraph(struct, stageSize);
+            else if (struct.structure_type === 'hashmap') content = renderHashmap(struct, stageSize);
+            else content = renderLinkedList(struct, stageSize);
+            return (
+              <Group key={`struct-wrap-${struct.annotation_name}-${idx}`} y={yOff}>
+                {content}
+              </Group>
+            );
           })}
         </Layer>
       </Stage>

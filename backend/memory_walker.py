@@ -404,6 +404,12 @@ class MemoryWalker:
     def auto_discover(self, variables: list) -> list:
         """Auto-detect data structures from local variable types.
 
+        **Per-variable strategy (v2):** Each pointer variable gets its own
+        annotation.  Post-walk deduplication in snapshot.py merges variables
+        that point to the exact same chain/tree, so e.g. slow/fast produce one
+        structure with two pointer labels, while prev/curr during reversal
+        produce two independent structures.
+
         For each pointer variable: inspect its deref_type, look for fields
         that point to the same struct type, and classify as linked_list
         or binary_tree based on field count and naming heuristics.
@@ -414,32 +420,39 @@ class MemoryWalker:
                        (typically Variable dataclass instances from debugger.py).
 
         Returns:
-            List of Annotation objects (imported lazily to avoid circular import).
+            List of Annotation objects.
         """
         import re
         from annotations import Annotation
 
         annotations: list[Annotation] = []
+        # Cache inspect_type results per struct_type to avoid redundant calls
+        _type_cache: dict[str, dict] = {}
+        # Track which variable names are already roots (to build auto-watch)
+        root_names: set[str] = set()
         discovered_types: set[str] = set()
 
         for var in variables:
             if not getattr(var, 'is_pointer', False) or not getattr(var, 'deref_type', ''):
                 continue
 
+            var_name = getattr(var, 'name', '')
             struct_type = getattr(var, 'deref_type', '')
-            if struct_type in discovered_types:
-                continue
 
-            resp = self._send({"cmd": "inspect_type", "type_name": struct_type})
-            if not resp.get("ok"):
-                continue
+            # Use cached type inspection
+            if struct_type not in _type_cache:
+                resp = self._send({"cmd": "inspect_type", "type_name": struct_type})
+                if resp.get("ok"):
+                    _type_cache[struct_type] = resp.get("result", {}).get("fields", [])
+                else:
+                    _type_cache[struct_type] = []  # negative cache
 
-            fields = resp.get("result", {}).get("fields", [])
+            fields = _type_cache[struct_type]
             same_type_fields = [f for f in fields
                                 if f.get("is_pointer") and f.get("points_to_same_type")]
 
             if len(same_type_fields) == 2:
-                # Binary tree candidate
+                # Binary tree candidate — prefer left/right naming
                 names = [f["name"] for f in same_type_fields]
                 if "left" in names or "right" in names:
                     left = next((f["name"] for f in same_type_fields
@@ -451,22 +464,24 @@ class MemoryWalker:
 
                 annotations.append(Annotation(
                     struct_type="binary_tree",
-                    name=f"auto_{var.name}",
-                    root_var=getattr(var, 'name', ''),
+                    name=f"auto_{var_name}",
+                    root_var=var_name,
                     left_field=left,
                     right_field=right,
                 ))
+                root_names.add(var_name)
                 discovered_types.add(struct_type)
 
             elif len(same_type_fields) == 1:
-                # Linked list candidate
+                # Linked list candidate — every pointer becomes its own root
                 next_name = same_type_fields[0]["name"]
                 annotations.append(Annotation(
                     struct_type="linked_list",
-                    name=f"auto_{var.name}",
-                    root_var=getattr(var, 'name', ''),
+                    name=f"auto_{var_name}",
+                    root_var=var_name,
                     next_field=next_name,
                 ))
+                root_names.add(var_name)
                 discovered_types.add(struct_type)
 
         # Array detection from non-pointer type strings like "int [8]"
@@ -476,20 +491,22 @@ class MemoryWalker:
             if m:
                 annotations.append(Annotation(
                     struct_type="array",
-                    name=f"auto_{var.name}",
+                    name=f"auto_{var_name}",
                     root_var=getattr(var, 'name', ''),
                     length_var=m.group(2),
                 ))
 
-        # Auto-watch: collect other pointer variables of discovered types
+        # Auto-watch: collect pointer variables of discovered types that
+        # weren't promoted to roots (e.g. when inspect_type failed for them).
         watched: list[str] = []
         for var in variables:
+            vname = getattr(var, 'name', '')
+            if vname in root_names:
+                continue
             if getattr(var, 'is_pointer', False) and getattr(var, 'deref_type', ''):
                 dt = getattr(var, 'deref_type', '')
-                if dt in discovered_types and getattr(var, 'name', '') not in [
-                        a.root_var for a in annotations
-                ]:
-                    watched.append(getattr(var, 'name', ''))
+                if dt in discovered_types:
+                    watched.append(vname)
 
         if watched:
             annotations.append(Annotation(
