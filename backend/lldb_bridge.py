@@ -438,24 +438,68 @@ def handle_walk_array(cmd: dict, ctx: dict) -> None:
         return
 
     try:
-        # Resolve length: try evaluating as variable first, then as literal
-        N = 0
-        len_result = frame.EvaluateExpression(length_var)
-        if len_result and len_result.GetError().Success():
-            try:
-                N = int(str(len_result.GetValue() or "0"))
-            except ValueError:
-                N = 0
+        # Resolve the array element count:
+        # 1. First, get the actual array size from LLDB type info (most reliable).
+        #    For stack arrays like int arr[8], the type string is "int[8]".
+        #    For heap arrays like int* arr, there is no embedded size.
+        # 2. Then try length_var as a variable name or literal integer.
+        # 3. Use the smaller of the two, and never exceed a reasonable max.
 
-        if N <= 0:
-            # Try parsing length_var as a literal integer
-            try:
-                N = int(length_var)
-            except ValueError:
-                send_response({"ok": False, "error": f"Cannot resolve length: {length_var} (value={N})"})
-                return
+        def _extract_size_from_type(var_name_expr: str, frame) -> int:
+            """Extract array element count from LLDB type, e.g. int[8] → 8."""
+            import re
+            type_val = frame.EvaluateExpression(var_name_expr)
+            if not type_val or type_val.GetError().Fail():
+                return 0
+            type_name = str(type_val.GetTypeName() or "")
+            m = re.match(r'.+?\s*\[(\d+)\]', type_name)
+            if m:
+                return int(m.group(1))
+            # Try sizeof division for pointer-based arrays
+            size_result = frame.EvaluateExpression(
+                f"(sizeof({var_name_expr}) / sizeof({var_name_expr}[0]))"
+            )
+            if size_result and size_result.GetError().Success():
+                try:
+                    return int(str(size_result.GetValue() or "0"))
+                except ValueError:
+                    pass
+            return 0
 
-        # Cap array size
+        def _resolve_length_var(lvar: str, frame) -> int:
+            """Resolve length: evaluate as variable, fall back to literal integer."""
+            # Try evaluating as variable
+            len_result = frame.EvaluateExpression(lvar)
+            if len_result and len_result.GetError().Success():
+                try:
+                    return int(str(len_result.GetValue() or "0"))
+                except ValueError:
+                    pass
+            # Try parsing as literal integer
+            try:
+                return int(lvar)
+            except ValueError:
+                pass
+            return 0
+
+        type_N = _extract_size_from_type(var_name, frame)
+
+        # Resolve length from the length_var (variable or literal)
+        var_N = _resolve_length_var(length_var, frame)
+
+        # Pick the reliable count
+        if type_N > 0 and var_N > 0:
+            N = min(type_N, var_N)
+        elif type_N > 0:
+            N = type_N
+        elif var_N > 0:
+            N = var_N
+        else:
+            send_response({"ok": False,
+                           "error": f"Cannot resolve array length: type_N={type_N}, var_N={var_N}"})
+            return
+
+        # Cap array size at 500 to prevent runaway loops from garbage values
         max_elements = 500
         if N > max_elements:
             N = max_elements

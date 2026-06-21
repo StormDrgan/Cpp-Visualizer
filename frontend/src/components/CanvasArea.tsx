@@ -758,7 +758,7 @@ function renderLinkedList(
     );
   }
 
-  // Node rectangles + labels
+  // Node rectangles + labels — v0.8: show only value, centered like array cells
   nodes.forEach((node) => {
     const { x, y } = positions[node.addr];
     const hasPointers = node.pointers_pointing_here.length > 0;
@@ -780,18 +780,11 @@ function renderLinkedList(
         />
         <Text
           name={`label-${node.addr}`}
-          text={node.label}
-          x={x} y={y + 6}
-          width={NODE_W} height={20}
+          text={nodeDisplayValue(node)}
+          x={x} y={y}
+          width={NODE_W} height={NODE_H}
           align="center" verticalAlign="middle"
-          fontSize={12} fontStyle="bold" fill="#333"
-        />
-        <Text
-          text={shortAddr(node.addr)}
-          x={x} y={y + 24}
-          width={NODE_W} height={16}
-          align="center" verticalAlign="middle"
-          fontSize={9} fill="#bbb"
+          fontSize={14} fontStyle="bold" fill="#333"
         />
       </Group>
     );
@@ -895,10 +888,10 @@ function renderArray(
         <Text
           name={`label-${node.addr}`}
           text={node.label}
-          x={x} y={y + 4}
-          width={ARRAY_CELL_W} height={20}
+          x={x} y={y}
+          width={ARRAY_CELL_W} height={ARRAY_CELL_H}
           align="center" verticalAlign="middle"
-          fontSize={13} fontStyle="bold" fill="#333"
+          fontSize={14} fontStyle="bold" fill="#333"
         />
         {/* Index label below cell */}
         <Text
@@ -967,6 +960,16 @@ function shortAddr(addr: string): string {
   return '…' + addr.slice(-4);
 }
 
+/** Extract just the display value from a heap node (no type or address). */
+function nodeDisplayValue(node: { label: string; fields: Record<string, unknown> }): string {
+  const fields = node.fields as Record<string, string>;
+  if (fields.val) return fields.val;
+  // Fallback: strip "TypeName(value)" → "value"
+  const m = node.label.match(/\(([^)]+)\)$/);
+  if (m) return m[1];
+  return node.label;
+}
+
 // ---- Stack rendering (sequential + linked) ----
 
 function renderStack(
@@ -1024,10 +1027,10 @@ function renderSequentialStack(
         <Text
           name={`label-${node.addr}`}
           text={node.label}
-          x={x + 8} y={y + 4}
-          width={STACK_CELL_W - 16} height={18}
+          x={x} y={y}
+          width={STACK_CELL_W} height={STACK_CELL_H}
           align="center" verticalAlign="middle"
-          fontSize={12} fontStyle="bold" fill="#333"
+          fontSize={13} fontStyle="bold" fill="#333"
         />
         <Text
           text={`[${i}]`}
@@ -1128,13 +1131,9 @@ function renderLinkedStack(
           strokeWidth={hasPointers ? 2 : 1}
           shadowColor={hasPointers ? 'rgba(26,115,232,0.15)' : 'transparent'} shadowBlur={6}
         />
-        <Text name={`label-${node.addr}`} text={node.label}
-          x={x} y={y + 6} width={NODE_W} height={20}
-          align="center" verticalAlign="middle" fontSize={12} fontStyle="bold" fill="#333"
-        />
-        <Text text={shortAddr(node.addr)}
-          x={x} y={y + 24} width={NODE_W} height={16}
-          align="center" verticalAlign="middle" fontSize={9} fill="#bbb"
+        <Text name={`label-${node.addr}`} text={nodeDisplayValue(node)}
+          x={x} y={y} width={NODE_W} height={NODE_H}
+          align="center" verticalAlign="middle" fontSize={14} fontStyle="bold" fill="#333"
         />
       </Group>
     );
@@ -1223,8 +1222,8 @@ function renderCircularQueue(
           shadowColor={hasPointers ? 'rgba(46,125,50,0.15)' : 'transparent'} shadowBlur={6}
         />
         <Text name={`label-${node.addr}`} text={node.label}
-          x={x} y={y + 4} width={QUEUE_CELL_W} height={20}
-          align="center" verticalAlign="middle" fontSize={13} fontStyle="bold" fill="#333"
+          x={x} y={y} width={QUEUE_CELL_W} height={QUEUE_CELL_H}
+          align="center" verticalAlign="middle" fontSize={14} fontStyle="bold" fill="#333"
         />
         <Text text={`[${idx}]`}
           x={x} y={y + QUEUE_CELL_H + 2} width={QUEUE_CELL_W} height={16}
@@ -1330,13 +1329,9 @@ function renderLinkedQueue(
           strokeWidth={hasPointers ? 2 : 1}
           shadowColor={hasPointers ? 'rgba(26,115,232,0.15)' : 'transparent'} shadowBlur={6}
         />
-        <Text name={`label-${node.addr}`} text={node.label}
-          x={x} y={y + 6} width={NODE_W} height={20}
-          align="center" verticalAlign="middle" fontSize={12} fontStyle="bold" fill="#333"
-        />
-        <Text text={shortAddr(node.addr)}
-          x={x} y={y + 24} width={NODE_W} height={16}
-          align="center" verticalAlign="middle" fontSize={9} fill="#bbb"
+        <Text name={`label-${node.addr}`} text={nodeDisplayValue(node)}
+          x={x} y={y} width={NODE_W} height={NODE_H}
+          align="center" verticalAlign="middle" fontSize={14} fontStyle="bold" fill="#333"
         />
       </Group>
     );
@@ -1711,13 +1706,9 @@ function renderHashmap(
             cornerRadius={6} fill="#fff" stroke="#c0c0c0" strokeWidth={1}
           />
           <Text name={`label-${chainNode.addr}`}
-            text={nodes.find(n => n.addr === chainNode.addr)?.label ?? ''}
-            x={chainNode.x} y={chainNode.y + 6} width={NODE_W} height={20}
-            align="center" verticalAlign="middle" fontSize={12} fontStyle="bold" fill="#333"
-          />
-          <Text text={shortAddr(chainNode.addr)}
-            x={chainNode.x} y={chainNode.y + 24} width={NODE_W} height={16}
-            align="center" verticalAlign="middle" fontSize={9} fill="#bbb"
+            text={nodeDisplayValue({ label: nodes.find(n => n.addr === chainNode.addr)?.label ?? '', fields: nodes.find(n => n.addr === chainNode.addr)?.fields ?? {} })}
+            x={chainNode.x} y={chainNode.y} width={NODE_W} height={NODE_H}
+            align="center" verticalAlign="middle" fontSize={14} fontStyle="bold" fill="#333"
           />
         </Group>
       );

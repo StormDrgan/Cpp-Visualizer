@@ -394,8 +394,16 @@ class MemoryWalker:
             resp = self._send({"cmd": "evaluate", "expression": var})
             if not resp.get("ok"):
                 continue
-            value = resp.get("result", {}).get("value", "0x0")
-            if not value or value in ("0x0", "0", "nullptr", "NULL"):
+            value = resp.get("result", {}).get("value", "")
+            if not value:
+                continue
+            # Null pointers: skip genuinely null pointer values, but NOT the
+            # decimal string "0" — that is a valid array index (lo=0, i=0).
+            if value in ("0x0", "0x0000000000000000", "nullptr", "NULL"):
+                continue
+            # Also skip "0" only when it's clearly a hex pointer address
+            # (uninitialized pointers may appear as "0x0" variations).
+            if value.startswith("0x") and _is_null_addr(value):
                 continue
 
             # Phase 1: address match (for pointer variables)
@@ -410,6 +418,12 @@ class MemoryWalker:
                 continue
 
             # Phase 2: index match (for array index variables like i, j, lo, hi)
+            # Guard: only attempt index match if the value looks like an integer
+            # (not a hex address), to avoid matching uninitialized pointer garbage.
+            try:
+                int(value)
+            except ValueError:
+                continue  # value is not an integer (likely a pointer address)
             for node in nodes:
                 node_index = node.fields.get("index", "")
                 if node_index == value:
