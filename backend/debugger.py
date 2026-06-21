@@ -52,6 +52,7 @@ class DebuggerState:
     current_function: str
     locals: list[Variable] = field(default_factory=list)
     call_stack: list[StackFrame] = field(default_factory=list)
+    stdout: str = ""
     is_terminated: bool = False
     exit_code: int | None = None
 
@@ -307,6 +308,7 @@ class LLDBController(DebuggerController):
             current_function=result.get("current_function", ""),
             locals=locals_list,
             call_stack=call_stack_list,
+            stdout=result.get("stdout", ""),
             is_terminated=is_terminated,
             exit_code=result.get("exit_code"),
         )

@@ -385,10 +385,32 @@ export const useStore = create<Store>((set, get) => ({
   loadTemplate: (templateId: string) => {
     const template = TEMPLATES.find((t) => t.id === templateId);
     if (!template) return;
+    // Clear breakpoints when switching templates — old line numbers are
+    // meaningless for the new code and would appear on random lines.
+    // Also notify the backend if a debugger session is active.
+    const sessionId = get().sessionId;
+    const oldBreakpoints = get().breakpoints;
+    if (sessionId && oldBreakpoints.size > 0) {
+      const ws = get().wsClient;
+      for (const line of oldBreakpoints) {
+        if (ws?.connected) {
+          ws.send('remove_breakpoint', { line });
+        } else {
+          try { api.removeBreakpoint(sessionId, line); } catch { /* ignore */ }
+        }
+      }
+    }
     set({
       code: template.code,
       annotations: template.annotations,
       activeTemplateId: templateId,
+      breakpoints: new Set<number>(),
+      // 立即重置可视化区域和状态信息，不等用户点击运行
+      snapshot: null,
+      status: 'idle',
+      diffActions: [],
+      compileErrors: [],
+      error: null,
     });
   },
 }));

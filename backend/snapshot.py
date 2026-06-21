@@ -61,7 +61,7 @@ def build_snapshot(
         "locals": locals_list,
         "watched_expressions": [],
         "heap_structures": heap_structures,
-        "stdout": "",
+        "stdout": getattr(debugger_state, "stdout", ""),
         "is_terminated": debugger_state.is_terminated,
         "exit_code": debugger_state.exit_code,
     }

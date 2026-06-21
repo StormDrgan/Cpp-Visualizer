@@ -1,10 +1,13 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useStore } from './store/useStore';
 import Header from './components/Header';
 import CodeEditor from './components/CodeEditor';
 import CanvasArea from './components/CanvasArea';
 import VariablePanel from './components/VariablePanel';
 import ControlBar from './components/ControlBar';
+
+/** Thickness of the drag-to-resize divider bars */
+const DIVIDER = 5;
 
 export default function App() {
   const createSession = useStore((s) => s.createSession);
@@ -26,14 +29,59 @@ export default function App() {
     }
   }, [sessionId, wsConnected, connectWs]);
 
+  // ---- Resizable panel state ----
+  const [splitX, setSplitX] = useState(42);
+  const [splitY, setSplitY] = useState(62);
+  const splitXRef = useRef(splitX);
+  splitXRef.current = splitX;
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const dragging = useRef<'h' | 'v' | null>(null);
+
+  const onDividerMouseDown = useCallback((which: 'h' | 'v') => (e: React.MouseEvent) => {
+    e.preventDefault();
+    dragging.current = which;
+    document.body.style.cursor = which === 'h' ? 'col-resize' : 'row-resize';
+    document.body.style.userSelect = 'none';
+
+    const onMove = (e: MouseEvent) => {
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+
+      if (which === 'h') {
+        const pct = ((e.clientX - rect.left) / rect.width) * 100;
+        setSplitX(Math.min(75, Math.max(20, pct)));
+      } else {
+        const topY = rect.top + 44;
+        const bottomY = rect.bottom - 44;
+        const rightHeight = bottomY - topY;
+        const mouseY = e.clientY - topY;
+        const pct = (mouseY / rightHeight) * 100;
+        setSplitY(Math.min(85, Math.max(15, pct)));
+      }
+    };
+
+    const onUp = () => {
+      dragging.current = null;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, []);
+
   return (
     <div
+      ref={containerRef}
       style={{
         width: '100vw',
         height: '100vh',
         display: 'grid',
         gridTemplateRows: '44px 1fr 44px',
-        gridTemplateColumns: '42% 1fr',
+        gridTemplateColumns: `${splitX}% ${DIVIDER}px 1fr`,
         overflow: 'hidden',
         fontFamily: '-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif',
       }}
@@ -48,19 +96,51 @@ export default function App() {
         <CodeEditor />
       </div>
 
+      {/* 水平分隔条 — 拖拽调整代码区/可视化区宽度 */}
+      <div
+        style={{
+          gridColumn: 2,
+          gridRow: 2,
+          cursor: 'col-resize',
+          background: 'transparent',
+          transition: 'background 0.15s',
+          zIndex: 10,
+        }}
+        onMouseDown={onDividerMouseDown('h')}
+        onMouseEnter={(e) => (e.currentTarget.style.background = '#e0e0e0')}
+        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+      />
+
       {/* 右侧 — 上下结构：画布(上) + 变量(下) */}
       <div style={{
-        gridColumn: 2, gridRow: 2,
+        gridColumn: 3, gridRow: 2,
         display: 'flex', flexDirection: 'column',
         overflow: 'hidden',
         borderLeft: '1px solid #e8e8e8',
       }}>
-        {/* 可视化画布 — 上部 */}
-        <div style={{ flex: '1 1 62%', overflow: 'hidden', borderBottom: '2px solid #e8e8e8', minHeight: 220 }}>
+        {/* 可视化画布 — 上部：占据 splitY% 高度，变量面板折叠时自动撑满 */}
+        <div style={{ flex: `1 1 auto`, overflow: 'hidden', maxHeight: `${splitY}%`, minHeight: 80 }}>
           <CanvasArea />
         </div>
-        {/* 变量面板 — 下部 */}
-        <div style={{ flex: '1 1 38%', overflow: 'hidden', minHeight: 140 }}>
+
+        {/* 垂直分隔条 — 拖拽调整画布最大占比 */}
+        <div
+          style={{
+            height: DIVIDER,
+            flexShrink: 0,
+            cursor: 'row-resize',
+            background: 'transparent',
+            transition: 'background 0.15s',
+            borderTop: '1px solid #e8e8e8',
+            zIndex: 10,
+          }}
+          onMouseDown={onDividerMouseDown('v')}
+          onMouseEnter={(e) => (e.currentTarget.style.background = '#e0e0e0')}
+          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+        />
+
+        {/* 变量面板 — 下部：内容高度，折叠后自然贴底 */}
+        <div style={{ flex: '0 0 auto', overflow: 'hidden' }}>
           <VariablePanel />
         </div>
       </div>

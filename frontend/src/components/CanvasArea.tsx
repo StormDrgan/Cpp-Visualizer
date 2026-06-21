@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useMemo, useCallback, Fragment } from 'react';
+import { useRef, useEffect, useState, useMemo, useCallback, Fragment, type MouseEvent as ReactMouseEvent } from 'react';
 import { Stage, Layer, Rect, Text, Arrow, Group, Line, Circle } from 'react-konva';
 import Konva from 'konva';
 import { useStore } from '../store/useStore';
@@ -333,13 +333,21 @@ export default function CanvasArea() {
   const stageRef = useRef<Konva.Stage>(null);
   const [viewport, setViewport] = useState({ w: 600, h: 320 });
 
-  // Zoom state
+  // Zoom state (Ctrl+wheel zoom kept for future use)
   const [stageScale, setStageScale] = useState(1);
-  // Pending scroll position after zoom (applied after re-render)
-  const pendingScroll = useRef<{ x: number; y: number } | null>(null);
 
   // Track previously seen actions
   const prevActionsLen = useRef(0);
+
+  // ---- Drag-to-pan state ----
+  const [isDragging, setIsDragging] = useState(false);
+  const dragState = useRef<{
+    active: boolean;
+    startX: number;
+    startY: number;
+    scrollStartX: number;
+    scrollStartY: number;
+  }>({ active: false, startX: 0, startY: 0, scrollStartX: 0, scrollStartY: 0 });
 
   const isIdle = status === 'idle' || status === 'ready';
   const isTerminated = status === 'terminated';
@@ -399,15 +407,6 @@ export default function CanvasArea() {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-
-  // ---- Apply pending scroll after stage dimensions change (zoom) ----
-  useEffect(() => {
-    if (pendingScroll.current && containerRef.current) {
-      const el = containerRef.current;
-      el.scrollTo({ left: pendingScroll.current.x, top: pendingScroll.current.y, behavior: 'instant' as ScrollBehavior });
-      pendingScroll.current = null;
-    }
-  }, [stageW, stageH]);
 
   // ---- Play diff animations ----
   useEffect(() => {
@@ -562,38 +561,38 @@ export default function CanvasArea() {
     }
   }, [snapshot?.step_number]);
 
-  // ---- Wheel handler: Ctrl/Meta+scroll → zoom; normal scroll → browser scroll ----
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    if (e.ctrlKey || e.metaKey) {
-      e.preventDefault();
-      const container = containerRef.current;
-      if (!container) return;
-
-      const rect = container.getBoundingClientRect();
-      const cursorX = e.clientX - rect.left;
-      const cursorY = e.clientY - rect.top;
-      const scrollX = container.scrollLeft;
-      const scrollY = container.scrollTop;
-
-      // Content point under cursor (in unscaled coordinate space)
-      const contentX = (cursorX + scrollX) / stageScale;
-      const contentY = (cursorY + scrollY) / stageScale;
-
-      const scaleBy = 1.1;
-      const direction = e.deltaY > 0 ? -1 : 1;
-      const newScale = direction > 0
-        ? Math.min(3, stageScale * scaleBy)
-        : Math.max(0.25, stageScale / scaleBy);
-
-      // New scroll position to keep contentX,contentY under cursor
-      const newScrollX = contentX * newScale - cursorX;
-      const newScrollY = contentY * newScale - cursorY;
-
-      pendingScroll.current = { x: newScrollX, y: newScrollY };
-      setStageScale(newScale);
+  // ---- Mouse drag-to-pan handlers ----
+  const handleMouseDown = useCallback((e: ReactMouseEvent<HTMLDivElement>) => {
+    // Only handle left button; ignore when clicking scrollbars
+    if (e.button !== 0) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('.konvajs-content')) {
+      dragState.current = {
+        active: true,
+        startX: e.clientX,
+        startY: e.clientY,
+        scrollStartX: containerRef.current?.scrollLeft ?? 0,
+        scrollStartY: containerRef.current?.scrollTop ?? 0,
+      };
+      setIsDragging(true);
     }
-    // Normal scroll: do nothing, let browser handle it
-  }, [stageScale]);
+  }, []);
+
+  const handleMouseMove = useCallback((e: ReactMouseEvent<HTMLDivElement>) => {
+    if (!dragState.current.active) return;
+    const dx = e.clientX - dragState.current.startX;
+    const dy = e.clientY - dragState.current.startY;
+    containerRef.current?.scrollTo({
+      left: dragState.current.scrollStartX - dx,
+      top: dragState.current.scrollStartY - dy,
+      behavior: 'instant' as ScrollBehavior,
+    });
+  }, []);
+
+  const handleMouseUp = useCallback(() => {
+    dragState.current.active = false;
+    setIsDragging(false);
+  }, []);
 
   // ---- Empty / terminal states ----
   if (isIdle || (nonEmptyStructures.length === 0 && !isTerminated)) {
@@ -640,8 +639,11 @@ export default function CanvasArea() {
   return (
     <div
       ref={containerRef}
-      style={{ height: '100%', overflow: 'auto', background: '#f9f9fb' }}
-      onWheel={handleWheel}
+      style={{ height: '100%', overflow: 'auto', background: '#f9f9fb', cursor: isDragging ? 'grabbing' : 'grab' }}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseUp}
     >
       <Stage
         ref={stageRef}

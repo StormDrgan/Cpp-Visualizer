@@ -22,6 +22,21 @@ class HeapNode:
     pointers_pointing_here: list[str] = field(default_factory=list)
 
 
+def _is_null_addr(addr: str) -> bool:
+    """Check if an address string represents null or is empty/unset.
+
+    Handles: "", "0x0", "0x0000000000000000", "0x00000000", etc.
+    At the first line of main(), uninitialized pointers may report as
+    0x0 or empty string from LLDB's GetVariables.
+    """
+    if not addr or not addr.strip():
+        return True
+    try:
+        return int(addr.strip(), 16) == 0
+    except ValueError:
+        return False  # non-hex string — likely an error, not null
+
+
 @dataclass
 class TreeEdge:
     """A parent-child edge in a tree structure."""
@@ -438,6 +453,14 @@ class MemoryWalker:
 
             var_name = getattr(var, 'name', '')
             struct_type = getattr(var, 'deref_type', '')
+
+            # Skip null or uninitialized pointers — at the first line of main(),
+            # pointer variables are in scope but their values haven't been set
+            # yet (garbage or 0x0).  Walking from a garbage address produces
+            # phantom nodes on the canvas.
+            raw_value = getattr(var, 'value', '').strip()
+            if _is_null_addr(raw_value):
+                continue
 
             # Use cached type inspection
             if struct_type not in _type_cache:
