@@ -1,5 +1,127 @@
 export const NEW_TEMPLATES = [
   {
+    id: 'btree_insert',
+    label: 'B树插入 (2-3树)',
+    icon: '🌲',
+    description: 'B-tree 插入构建 — m=3 阶',
+    code: `#include <iostream>
+using namespace std;
+
+struct BNode {
+    int keys[4];
+    BNode* children[5];
+    int n;
+    bool leaf;
+    BNode() : n(0), leaf(true) {
+        for (int i = 0; i < 5; i++) children[i] = nullptr;
+        for (int i = 0; i < 4; i++) keys[i] = 0;
+    }
+};
+
+// @viz b_tree(BT) root=root.order=3
+int main() {
+    BNode* root = new BNode();
+    int vals[] = {10, 20, 5, 6, 12, 30, 7, 17};
+    for (int i = 0; i < 8; i++) {
+        int k = vals[i];
+        if (root->n == 0) {
+            root->keys[0] = k;
+            root->n = 1;
+            continue;
+        }
+        BNode* cur = root;
+        if (cur->n == 3) {
+            BNode* s = new BNode();
+            s->leaf = cur->leaf;
+            s->children[0] = cur->children[2];
+            s->children[1] = cur->children[3];
+            s->keys[0] = cur->keys[3];
+            s->n = 1;
+            cur->n = 1;
+            cur->children[2] = nullptr;
+            cur->children[3] = nullptr;
+            BNode* nr = new BNode();
+            nr->leaf = false;
+            nr->keys[0] = cur->keys[1];
+            nr->children[0] = cur;
+            nr->children[1] = s;
+            nr->n = 1;
+            root = nr;
+            if (k < nr->keys[0]) cur = nr->children[0];
+            else cur = nr->children[1];
+        }
+        while (!cur->leaf) {
+            int ci = cur->n;
+            for (int j = 0; j < cur->n; j++) {
+                if (k < cur->keys[j]) { ci = j; break; }
+            }
+            cur = cur->children[ci];
+        }
+        int pos = cur->n - 1;
+        while (pos >= 0 && cur->keys[pos] > k) {
+            cur->keys[pos + 1] = cur->keys[pos];
+            pos--;
+        }
+        cur->keys[pos + 1] = k;
+        cur->n++;
+    }
+    cout << "B-tree built, root keys=" << root->keys[0] << endl;
+    return 0;
+}
+`,
+  },
+  {
+    id: 'bplustree_search',
+    label: 'B+树搜索',
+    icon: '🌿',
+    description: 'B+树搜索 — m=4 阶, 叶子链表',
+    code: `#include <iostream>
+using namespace std;
+
+struct BPNode {
+    int keys[5];
+    BPNode* children[6];
+    int n;
+    bool leaf;
+    BPNode* next;
+    BPNode() : n(0), leaf(true), next(nullptr) {
+        for (int i = 0; i < 6; i++) children[i] = nullptr;
+        for (int i = 0; i < 5; i++) keys[i] = 0;
+    }
+};
+
+// @viz bplustree(BP) root=root.order=4
+int main() {
+    BPNode* root = new BPNode();
+    root->keys[0] = 5; root->n = 1;
+
+    BPNode* l1 = new BPNode();
+    l1->keys[0] = 1; l1->keys[1] = 3; l1->n = 2;
+    BPNode* l2 = new BPNode();
+    l2->keys[0] = 7; l2->keys[1] = 9; l2->n = 2;
+
+    l1->next = l2;
+    root->children[0] = l1;
+    root->children[1] = l2;
+    root->leaf = false;
+
+    int target = 7;
+    BPNode* cur = root;
+    while (!cur->leaf) {
+        int i = 0;
+        while (i < cur->n && target >= cur->keys[i]) i++;
+        cur = cur->children[i];
+    }
+    bool found = false;
+    for (int i = 0; i < cur->n; i++) {
+        if (cur->keys[i] == target) { found = true; break; }
+    }
+    cout << "search " << target << " = " << (found ? "found" : "not found") << endl;
+    return 0;
+}
+`,
+  },
+  {
     id: 'doubly_linked_list',
     label: '双向链表',
     icon: '🔗',

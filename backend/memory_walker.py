@@ -380,6 +380,68 @@ class MemoryWalker:
             edges=edges,
         )
 
+    def walk_b_tree(
+        self,
+        annotation_name: str,
+        root_var: str,
+        order: int = 3,
+        is_bplus: bool = False,
+        watched_vars: list[str] | None = None,
+    ) -> TraversalResult:
+        """Walk a B-tree or B+tree from root_var.
+
+        Args:
+            annotation_name: User-given name (e.g., "bt").
+            root_var: C++ variable name of the root pointer.
+            order: B-tree order m (max children per node).
+            is_bplus: If True, treat as B+tree (leaves have sibling links).
+            watched_vars: Optional list of pointer variable names to match.
+        """
+        if watched_vars is None:
+            watched_vars = []
+
+        resp = self._send({
+            "cmd": "walk_b_tree",
+            "root_var": root_var,
+            "order": order,
+            "is_bplus": is_bplus,
+        })
+
+        if not resp.get("ok"):
+            return TraversalResult(
+                annotation_name=annotation_name,
+                structure_type="b_tree" if not is_bplus else "bplustree",
+                root_node_addr="0x0",
+            )
+
+        result = resp.get("result", {})
+        raw_nodes = result.get("nodes", [])
+        raw_edges = result.get("edges", [])
+        root_addr = raw_nodes[0]["addr"] if raw_nodes else "0x0"
+
+        nodes = [HeapNode(
+            addr=n.get("addr", "0x0"),
+            label=n.get("label", ""),
+            fields=n.get("fields", {}),
+        ) for n in raw_nodes]
+
+        edges = [TreeEdge(
+            from_idx=e.get("from_idx", -1),
+            to_idx=e.get("to_idx", -1),
+            child_side=e.get("child_side", ""),
+        ) for e in raw_edges]
+
+        if watched_vars and nodes:
+            self._match_pointers(nodes, watched_vars)
+
+        return TraversalResult(
+            annotation_name=annotation_name,
+            structure_type="b_tree" if not is_bplus else "bplustree",
+            root_node_addr=root_addr,
+            nodes=nodes,
+            edges=edges,
+        )
+
     def _match_pointers(self, nodes: list[HeapNode], watched_vars: list[str]) -> None:
         """For each watched variable, find which node it points to.
 

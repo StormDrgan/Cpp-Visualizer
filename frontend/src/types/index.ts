@@ -38,6 +38,8 @@ export interface HeapStructure {
   prev_field?: string;         // v0.9: doubly linked list
   tree_variant?: string;       // v0.9: "avl" | "threaded" | ""
   traversal_state?: Record<string, string>;  // v0.9: addr -> color for graph traversal
+  order?: number;              // B-tree/B+tree order (m)
+  is_leaf?: boolean;           // B-tree/B+tree leaf indicator
 }
 
 export interface StateSnapshot {

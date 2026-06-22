@@ -108,7 +108,8 @@ def _build_heap_structures(
     # Check if user provided any struct-type annotations
     has_struct = any(
         ann.struct_type in ("linked_list", "binary_tree", "array",
-                            "stack", "queue", "heap", "graph", "hashmap")
+                            "stack", "queue", "heap", "graph", "hashmap",
+                            "b_tree", "bplustree")
         for ann in all_annotations
     )
 
@@ -231,6 +232,30 @@ def _build_heap_structures(
                 watched_vars=watched,
             )
             structures.append(_traversal_to_dict(result))
+        elif ann.struct_type == "b_tree":
+            order = int(ann.length_var or "3")
+            result = walker.walk_b_tree(
+                annotation_name=ann.name,
+                root_var=ann.root_var,
+                order=order,
+                is_bplus=False,
+                watched_vars=watched,
+            )
+            sdict = _traversal_to_dict(result)
+            sdict["order"] = order
+            structures.append(sdict)
+        elif ann.struct_type == "bplustree":
+            order = int(ann.length_var or "4")
+            result = walker.walk_b_tree(
+                annotation_name=ann.name,
+                root_var=ann.root_var,
+                order=order,
+                is_bplus=True,
+                watched_vars=watched,
+            )
+            sdict = _traversal_to_dict(result)
+            sdict["order"] = order
+            structures.append(sdict)
         elif ann.struct_type == "recursion_tree":
             # v0.9: recursion tree from call stack
             if debugger_state:
@@ -267,7 +292,7 @@ def _dedup_structures(structures: list[dict]) -> list[dict]:
 
     # Only dedup linked_list and binary_tree — array/stack/queue/graph/hashmap
     # have different semantics (index-based, not address-based).
-    DEDUP_TYPES = {"linked_list", "binary_tree"}
+    DEDUP_TYPES = {"linked_list", "binary_tree", "b_tree", "bplustree"}
 
     # Separate structures into dedup-eligible and pass-through
     eligible: list[dict] = []

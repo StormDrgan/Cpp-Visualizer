@@ -67,6 +67,8 @@ def handle_command(cmd: dict, ctx: dict) -> None:
             handle_walk_graph(cmd, ctx)
         elif name == "walk_hashmap":
             handle_walk_hashmap(cmd, ctx)
+        elif name == "walk_b_tree":
+            handle_walk_b_tree(cmd, ctx)
         elif name == "inspect_type":
             handle_inspect_type(cmd, ctx)
         elif name == "terminate":
@@ -1225,6 +1227,200 @@ def _walk_hashmap_open_addressing(frame, table_var: str) -> tuple[list[dict], li
             "label": label,
             "fields": {"slot_idx": str(i), "key": key_str, "val": val_str, "empty": str(is_empty).lower()},
         })
+
+    return nodes, edges
+
+
+def handle_walk_b_tree(cmd: dict, ctx: dict) -> None:
+    """Walk a B-tree/B+tree starting from root_var.
+
+    Reads keys[] and children[] arrays from each node.
+    Command params:
+      - root_var: root pointer variable name
+      - order: B-tree order m (default 3)
+      - is_bplus: bool (default False) — if True, treat as B+tree
+    """
+    root_var = cmd.get("root_var", "")
+    order = int(cmd.get("order", 3))
+    is_bplus = cmd.get("is_bplus", False)
+    process = ctx.get("process")
+
+    if not process or not ctx.get("alive"):
+        send_response({"ok": False, "error": "No process running"})
+        return
+
+    thread = _get_thread(process)
+    if not thread:
+        send_response({"ok": False, "error": "No thread"})
+        return
+
+    frame = thread.GetFrameAtIndex(0)
+    if not frame or not frame.IsValid():
+        send_response({"ok": False, "error": "No valid frame"})
+        return
+
+    if not root_var:
+        send_response({"ok": False, "error": "No root_var provided"})
+        return
+
+    try:
+        root_val = frame.EvaluateExpression(root_var)
+        if not root_val or root_val.GetError().Fail():
+            send_response({"ok": False, "error": f"Failed to evaluate {root_var}"})
+            return
+
+        root_addr = str(root_val.GetValue() or "0x0")
+        if _is_null(root_addr):
+            send_response({"ok": True, "result": {"nodes": [], "edges": []}})
+            return
+
+        type_name = str(root_val.GetTypeName() or "")
+        struct_type = type_name.replace(" *", "").replace("*", "").strip()
+
+        if not struct_type:
+            send_response({"ok": False, "error": "Could not determine struct type from variable"})
+            return
+
+        nodes, edges = _walk_b_tree_bfs(frame, root_addr, struct_type, order, is_bplus)
+        send_response({"ok": True, "result": {"nodes": nodes, "edges": edges}})
+
+    except Exception as e:
+        send_response({"ok": False, "error": str(e)})
+
+
+def _walk_b_tree_bfs(frame, root_addr: str, struct_type: str,
+                      order: int, is_bplus: bool) -> tuple[list[dict], list[dict]]:
+    """BFS walk of a B-tree. Returns (nodes, edges).
+
+    Each B-tree node stores:
+      - keys[] array (size up to order-1)
+      - children[] array (size up to order)
+      - n / num_keys / count field (current number of keys)
+      - leaf / is_leaf field
+
+    Edges use child_side = "0", "1", "2", ... (child index between keys).
+    """
+    from collections import deque
+
+    nodes = []
+    edges = []
+    visited = set()
+    queue = deque()
+    queue.append((root_addr, -1, -1))  # (addr, parent_index, child_slot_index)
+
+    max_nodes = 200
+
+    while queue and len(nodes) < max_nodes:
+        addr, parent_idx, child_slot = queue.popleft()
+
+        if _is_null(addr) or addr in visited:
+            continue
+
+        visited.add(addr)
+        node_idx = len(nodes)
+
+        # Read node properties
+        fields = {}
+        keys = []
+        num_keys = 0
+
+        # Try to read count field: n, num_keys, count, size, key_count
+        for count_field in ("n", "num_keys", "count", "size", "key_count", "numKeys"):
+            count_expr = f"(({struct_type}*){addr})->{count_field}"
+            count_result = frame.EvaluateExpression(count_expr)
+            if count_result and count_result.GetError().Success():
+                try:
+                    num_keys = int(str(count_result.GetValue() or "0"))
+                    fields[count_field] = str(num_keys)
+                    break
+                except (ValueError, TypeError):
+                    pass
+
+        # Fallback: read keys until we hit 0 or order-1
+        if num_keys <= 0:
+            num_keys = order - 1
+
+        # Read keys
+        for i in range(min(num_keys, order)):
+            key_expr = f"(({struct_type}*){addr})->keys[{i}]"
+            key_result = frame.EvaluateExpression(key_expr)
+            if key_result and key_result.GetError().Success():
+                key_val = str(key_result.GetValue() or "")
+                if key_val and key_val != "0":
+                    keys.append(key_val)
+            # Also try key array field
+            if not keys or i >= len(keys):
+                break
+
+        # If no keys array, try individual val/key fields
+        if not keys:
+            # Try reading a single val or key field
+            for val_field in ("val", "key", "data"):
+                val_expr = f"(({struct_type}*){addr})->{val_field}"
+                val_result = frame.EvaluateExpression(val_expr)
+                if val_result and val_result.GetError().Success():
+                    val_str = str(val_result.GetValue() or "")
+                    if val_str and val_str != "0":
+                        keys.append(val_str)
+                        fields[val_field] = val_str
+                        break
+
+        # Check if leaf
+        is_leaf = False
+        for leaf_field in ("leaf", "is_leaf", "isLeaf"):
+            leaf_expr = f"(({struct_type}*){addr})->{leaf_field}"
+            leaf_result = frame.EvaluateExpression(leaf_expr)
+            if leaf_result and leaf_result.GetError().Success():
+                leaf_val = str(leaf_result.GetValue() or "").lower()
+                is_leaf = leaf_val in ("true", "1")
+                fields[leaf_field] = leaf_val
+                break
+
+        # Build label from keys
+        if keys:
+            label = " | ".join(keys)
+        else:
+            label = f"{struct_type}@{addr[-4:]}"
+
+        fields["_keys"] = "|".join(keys)
+        fields["_is_leaf"] = str(is_leaf).lower()
+        fields["_child_slot"] = str(child_slot)
+
+        nodes.append({
+            "addr": addr,
+            "label": label,
+            "fields": fields,
+        })
+
+        # Record edge from parent
+        if parent_idx >= 0:
+            edges.append({
+                "from_idx": parent_idx,
+                "to_idx": node_idx,
+                "child_side": str(child_slot),
+            })
+
+        # If not leaf, read children pointers
+        if not is_leaf:
+            # Read children array: children[0] through children[num_keys]
+            num_children = num_keys + 1 if num_keys > 0 else order
+            for ci in range(min(num_children, order)):
+                child_expr = f"(({struct_type}*){addr})->children[{ci}]"
+                child_result = frame.EvaluateExpression(child_expr)
+                if child_result and child_result.GetError().Success():
+                    child_addr = str(child_result.GetValue() or "0x0")
+                    if not _is_null(child_addr):
+                        queue.append((child_addr, node_idx, ci))
+
+        # For B+tree, also check leaf sibling pointer
+        if is_bplus and is_leaf:
+            for sib_field in ("next", "sibling", "next_leaf"):
+                sib_expr = f"(({struct_type}*){addr})->{sib_field}"
+                sib_result = frame.EvaluateExpression(sib_expr)
+                if sib_result and sib_result.GetError().Success():
+                    sib_addr = str(sib_result.GetValue() or "0x0")
+                    if not _is_null(sib_addr) and sib_addr not in visited:
+                        fields["_sibling"] = sib_addr
 
     return nodes, edges
 

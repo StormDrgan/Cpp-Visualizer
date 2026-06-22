@@ -188,6 +188,28 @@ export const STRUCT_TYPES: StructTypeDef[] = [
       `// @viz recursion_tree(${name})`,
   },
   {
+    type: 'b_tree',
+    label: 'B树',
+    icon: '🌲',
+    fields: [
+      { key: 'root_var', label: '根指针变量', placeholder: 'root' },
+      { key: 'name', label: '阶数 (m)', placeholder: '3' },
+    ],
+    format: (name, f) =>
+      `// @viz b_tree(${name}) root=${f.root_var}.order=${f.name}`,
+  },
+  {
+    type: 'bplustree',
+    label: 'B+树',
+    icon: '🌿',
+    fields: [
+      { key: 'root_var', label: '根指针变量', placeholder: 'root' },
+      { key: 'name', label: '阶数 (m)', placeholder: '4' },
+    ],
+    format: (name, f) =>
+      `// @viz bplustree(${name}) root=${f.root_var}.order=${f.name}`,
+  },
+  {
     type: 'watch',
     label: '监视指针',
     icon: '👁️',
@@ -361,6 +383,28 @@ function parseSingleAnnotation(text: string): Omit<VizAnnotation, 'line' | 'raw'
       struct_type: 'recursion_tree', name: m[1], root_var: '',
       next_field: '', prev_field: '', left_field: '', right_field: '',
       length_var: '', top_var: '', front_var: '', rear_var: '', mode: '', watched_vars: [],
+    };
+  }
+
+  // b_tree
+  m = s.match(/@viz\s+b_tree\((\w+)\)\s+root=(\w+(?:->\w+)*)(?:\.order=(\d+))?/);
+  if (m) {
+    return {
+      struct_type: 'b_tree', name: m[1], root_var: m[2],
+      length_var: m[3] || '3',
+      next_field: '', prev_field: '', left_field: '', right_field: '',
+      top_var: '', front_var: '', rear_var: '', mode: '', watched_vars: [],
+    };
+  }
+
+  // bplustree
+  m = s.match(/@viz\s+bplustree\((\w+)\)\s+root=(\w+(?:->\w+)*)(?:\.order=(\d+))?/);
+  if (m) {
+    return {
+      struct_type: 'bplustree', name: m[1], root_var: m[2],
+      length_var: m[3] || '4',
+      next_field: '', prev_field: '', left_field: '', right_field: '',
+      top_var: '', front_var: '', rear_var: '', mode: '', watched_vars: [],
     };
   }
 

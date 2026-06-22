@@ -118,6 +118,18 @@ _RECURSION_TREE_RE = re.compile(
     r'@viz\s+recursion_tree\((\w+)\)'
 )
 
+_BTREE_RE = re.compile(
+    r'@viz\s+b_tree\((\w+)\)'
+    r'\s+root=(\w+(?:->\w+)*)'
+    r'(?:\.order=(\d+))?'
+)
+
+_BPLUSTREE_RE = re.compile(
+    r'@viz\s+bplustree\((\w+)\)'
+    r'\s+root=(\w+(?:->\w+)*)'
+    r'(?:\.order=(\d+))?'
+)
+
 
 def parse_annotations(source_code: str) -> list[Annotation]:
     """Extract all @viz annotations from source code.
@@ -280,6 +292,28 @@ def parse_annotations(source_code: str) -> list[Annotation]:
             annotations.append(Annotation(
                 struct_type="recursion_tree",
                 name=m.group(1),
+            ))
+            continue
+
+        # Try b_tree
+        m = _BTREE_RE.search(stripped)
+        if m:
+            annotations.append(Annotation(
+                struct_type="b_tree",
+                name=m.group(1),
+                root_var=m.group(2),
+                length_var=m.group(3) or "3",
+            ))
+            continue
+
+        # Try bplustree
+        m = _BPLUSTREE_RE.search(stripped)
+        if m:
+            annotations.append(Annotation(
+                struct_type="bplustree",
+                name=m.group(1),
+                root_var=m.group(2),
+                length_var=m.group(3) or "4",
             ))
             continue
 

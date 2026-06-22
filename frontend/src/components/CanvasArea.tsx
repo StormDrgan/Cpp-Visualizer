@@ -108,40 +108,68 @@ function getBinaryTreeLayout(
   const edges = struct.edges;
   if (nodes.length === 0) return null;
 
-  // Compute depths via BFS on edges
-  const depth: number[] = new Array(nodes.length).fill(0);
+  // 1. Build children map and find root
+  const children: number[][] = Array.from({ length: nodes.length }, () => []);
+  const hasParent: boolean[] = new Array(nodes.length).fill(false);
   for (const e of edges) {
-    depth[e.to_idx] = depth[e.from_idx] + 1;
+    children[e.from_idx].push(e.to_idx);
+    hasParent[e.to_idx] = true;
+  }
+
+  const rootIdx = hasParent.findIndex((v) => !v);
+  if (rootIdx === -1) {
+    // Degenerate: no clear root (shouldn't happen), fall back to node 0
+    const positions: Record<number, { x: number; y: number }> = {};
+    positions[0] = { x: canvasSize.w / 2, y: 30 };
+    return { positions, bounds: { minX: canvasSize.w / 2 - 50, maxX: canvasSize.w / 2 + 50, minY: 20, maxY: 80 } };
+  }
+
+  // 2. Compute depths via BFS from root
+  const depth: number[] = new Array(nodes.length).fill(0);
+  const bfsQueue = [rootIdx];
+  for (let qi = 0; qi < bfsQueue.length; qi++) {
+    const idx = bfsQueue[qi];
+    for (const child of children[idx]) {
+      depth[child] = depth[idx] + 1;
+      bfsQueue.push(child);
+    }
   }
   const maxDepth = Math.max(0, ...depth);
 
-  // Group by depth
-  const nodesByDepth: number[][] = Array.from({ length: maxDepth + 1 }, () => []);
-  for (let i = 0; i < nodes.length; i++) {
-    nodesByDepth[depth[i]].push(i);
-  }
-
-  // Position nodes centered at each level
+  // 3. DFS post-order to assign x positions
+  //    Leaf nodes get sequential x slots. Parent x = midpoint of children x's.
+  const LEAF_GAP = 64; // minimum spacing between adjacent leaf centers
+  let nextLeafX = 0;
   const positions: Record<number, { x: number; y: number }> = {};
   const startY = 30;
-  const usableWidth = canvasSize.w - 60;
 
-  for (let level = 0; level <= maxDepth; level++) {
-    const count = nodesByDepth[level].length;
-    const gap = count > 1 ? Math.min(100, usableWidth / (count + 1)) : 0;
-    const totalWidth = count > 1 ? (count - 1) * gap : 0;
-    const startX = (canvasSize.w - totalWidth) / 2;
+  function placeSubtree(idx: number): number {
+    const cs = children[idx];
+    if (cs.length === 0) {
+      // Leaf — assign next available slot
+      const x = nextLeafX * LEAF_GAP;
+      nextLeafX++;
+      positions[idx] = { x, y: startY + depth[idx] * TREE_LEVEL_H };
+      return x;
+    }
 
-    nodesByDepth[level].forEach((nodeIdx, i) => {
-      positions[nodeIdx] = {
-        x: count === 1 ? canvasSize.w / 2 : startX + i * gap,
-        y: startY + level * TREE_LEVEL_H,
-      };
-    });
+    // Position children first (post-order), collect their x positions
+    const childX: number[] = cs.map((c) => placeSubtree(c));
+
+    // Parent x = midpoint of leftmost and rightmost child
+    const minX = Math.min(...childX);
+    const maxX = Math.max(...childX);
+    const x = (minX + maxX) / 2;
+    positions[idx] = { x, y: startY + depth[idx] * TREE_LEVEL_H };
+    return x;
   }
 
-  const minX = Math.min(...Object.values(positions).map((p) => p.x)) - 50;
-  const maxX = Math.max(...Object.values(positions).map((p) => p.x)) + 50;
+  placeSubtree(rootIdx);
+
+  // 4. Compute bounds from actual positions
+  const allXs = Object.values(positions).map((p) => p.x);
+  const minX = Math.min(...allXs) - 60;
+  const maxX = Math.max(...allXs) + 60;
   const minY = startY - 10;
   const maxY = startY + maxDepth * TREE_LEVEL_H + 50;
 
@@ -319,6 +347,13 @@ function getStructBounds(struct: HeapStructure, canvasSize: { w: number; h: numb
       minY: 20,
       maxY: 20 + 200 + 100,
     };
+  }
+  if (type === 'b_tree' || type === 'bplustree') {
+    const layout = getBTreeLayout(struct, canvasSize);
+    if (!layout) return emptyBounds;
+    const maxX = Math.max(...layout.layouts.map(l => l.x + l.width)) + 40;
+    const maxY = Math.max(...layout.layouts.map(l => l.y)) + BTREE_KEY_H + BTREE_NODE_PAD * 2 + 40;
+    return { minX: 20, maxX: Math.max(maxX, 200), minY: 10, maxY: Math.max(maxY, 80) };
   }
   // linked_list (default)
   const layout = getLinkedListLayout(struct, canvasSize);
@@ -789,6 +824,8 @@ export default function CanvasArea() {
             else if (struct.structure_type === 'graph') content = renderGraph(struct, stageSize);
             else if (struct.structure_type === 'hashmap') content = renderHashmap(struct, stageSize);
             else if (struct.structure_type === 'recursion_tree') content = renderRecursionTree(struct, stageSize);
+            else if (struct.structure_type === 'b_tree') content = renderBTree(struct, stageSize);
+            else if (struct.structure_type === 'bplustree') content = renderBPlusTree(struct, stageSize);
             else content = renderLinkedList(struct, stageSize);
             return (
               <Group key={`struct-wrap-${struct.annotation_name}-${idx}`} y={yOff}>
@@ -866,8 +903,8 @@ function renderLinkedList(
           x={x} y={y}
           width={NODE_W} height={NODE_H}
           cornerRadius={NODE_RADIUS}
-          fill={hasPointers ? '#e3f2fd' : '#fff'}
-          stroke={hasPointers ? '#1a73e8' : '#c0c0c0'}
+          fill={hasPointers ? '#e3f2fd' : '#fafafa'}
+          stroke={hasPointers ? '#1a73e8' : '#d0d0d0'}
           strokeWidth={hasPointers ? 2 : 1}
           shadowColor={hasPointers ? 'rgba(26,115,232,0.15)' : 'transparent'}
           shadowBlur={6}
@@ -921,16 +958,6 @@ function renderLinkedList(
     });
   });
 
-  // Structure name label
-  elements.push(
-    <Text
-      key="struct-name"
-      text={struct.annotation_name}
-      x={startX} y={CENTER_Y - NODE_H / 2 - 32}
-      fontSize={11} fill="#999" fontStyle="bold"
-    />
-  );
-
   return <Group key={struct.annotation_name}>{elements}</Group>;
 }
 
@@ -973,10 +1000,10 @@ function renderArray(
           x={x} y={y}
           width={ARRAY_CELL_W} height={ARRAY_CELL_H}
           cornerRadius={4}
-          fill={hasPointers ? '#e8f5e9' : '#fff'}
-          stroke={hasPointers ? '#2e7d32' : '#c0c0c0'}
+          fill={hasPointers ? '#e0f2f1' : '#fafafa'}
+          stroke={hasPointers ? '#00897b' : '#d0d0d0'}
           strokeWidth={hasPointers ? 2 : 1}
-          shadowColor={hasPointers ? 'rgba(46,125,50,0.15)' : 'transparent'}
+          shadowColor={hasPointers ? 'rgba(0,137,123,0.15)' : 'transparent'}
           shadowBlur={6}
         />
         <Text
@@ -1036,22 +1063,7 @@ function renderArray(
     });
   });
 
-  // Structure name label
-  elements.push(
-    <Text
-      key="struct-name"
-      text={struct.annotation_name}
-      x={startX} y={ARRAY_START_Y - 28}
-      fontSize={11} fill="#999" fontStyle="bold"
-    />
-  );
-
   return <Group key={struct.annotation_name}>{elements}</Group>;
-}
-
-function shortAddr(addr: string): string {
-  if (!addr || addr === '0x0') return 'nullptr';
-  return '…' + addr.slice(-4);
 }
 
 /** Extract just the display value from a heap node (no type or address). */
@@ -1112,10 +1124,10 @@ function renderSequentialStack(
           x={x} y={y}
           width={STACK_CELL_W} height={STACK_CELL_H}
           cornerRadius={3}
-          fill={hasPointers ? '#e3f2fd' : '#fff'}
-          stroke={hasPointers ? '#1a73e8' : '#b0b0b0'}
+          fill={hasPointers ? '#fff3e0' : '#fafafa'}
+          stroke={hasPointers ? '#e65100' : '#d0d0d0'}
           strokeWidth={hasPointers ? 2 : 1}
-          shadowColor={hasPointers ? 'rgba(26,115,232,0.12)' : 'transparent'}
+          shadowColor={hasPointers ? 'rgba(230,81,0,0.12)' : 'transparent'}
           shadowBlur={4}
         />
         <Text
@@ -1163,13 +1175,6 @@ function renderSequentialStack(
     }
   }
 
-  // Structure name
-  elements.push(
-    <Text key="struct-name" text={`${struct.annotation_name} (stack)`
-    } x={STACK_START_X} y={STACK_START_Y - 26}
-      fontSize={11} fill="#999" fontStyle="bold"
-    />
-  );
 
   return <Group key={struct.annotation_name}>{elements}</Group>;
 }
@@ -1220,10 +1225,10 @@ function renderLinkedStack(
     elements.push(
       <Group key={`ls-node-${node.addr}`} name={`node-${node.addr}`}>
         <Rect name={`rect-${node.addr}`} x={x} y={y} width={NODE_W} height={NODE_H} cornerRadius={NODE_RADIUS}
-          fill={hasPointers ? '#e3f2fd' : '#fff'}
-          stroke={hasPointers ? '#1a73e8' : '#c0c0c0'}
+          fill={hasPointers ? '#fff3e0' : '#fafafa'}
+          stroke={hasPointers ? '#e65100' : '#d0d0d0'}
           strokeWidth={hasPointers ? 2 : 1}
-          shadowColor={hasPointers ? 'rgba(26,115,232,0.15)' : 'transparent'} shadowBlur={6}
+          shadowColor={hasPointers ? 'rgba(230,81,0,0.15)' : 'transparent'} shadowBlur={6}
         />
         <Text name={`label-${node.addr}`} text={nodeDisplayValue(node)}
           x={x} y={y} width={NODE_W} height={NODE_H}
@@ -1252,13 +1257,6 @@ function renderLinkedStack(
       );
     }
   }
-
-  elements.push(
-    <Text key="struct-name" text={`${struct.annotation_name} (linked stack)`
-    } x={startX} y={CENTER_Y - NODE_H / 2 - 40}
-      fontSize={11} fill="#999" fontStyle="bold"
-    />
-  );
 
   return <Group key={struct.annotation_name}>{elements}</Group>;
 }
@@ -1310,10 +1308,10 @@ function renderCircularQueue(
           x={x} y={y}
           width={QUEUE_CELL_W} height={QUEUE_CELL_H}
           cornerRadius={4}
-          fill={hasPointers ? '#e8f5e9' : '#fff'}
-          stroke={hasPointers ? '#2e7d32' : '#c0c0c0'}
+          fill={hasPointers ? '#e8eaf6' : '#fafafa'}
+          stroke={hasPointers ? '#3949ab' : '#d0d0d0'}
           strokeWidth={hasPointers ? 2 : 1}
-          shadowColor={hasPointers ? 'rgba(46,125,50,0.15)' : 'transparent'} shadowBlur={6}
+          shadowColor={hasPointers ? 'rgba(57,73,171,0.15)' : 'transparent'} shadowBlur={6}
         />
         <Text name={`label-${node.addr}`} text={node.label}
           x={x} y={y} width={QUEUE_CELL_W} height={QUEUE_CELL_H}
@@ -1365,12 +1363,6 @@ function renderCircularQueue(
     }
   }
 
-  elements.push(
-    <Text key="struct-name" text={`${struct.annotation_name} (queue)`
-    } x={startX} y={CENTER_Y - QUEUE_CELL_H / 2 - 42}
-      fontSize={11} fill="#999" fontStyle="bold"
-    />
-  );
 
   return <Group key={struct.annotation_name}>{elements}</Group>;
 }
@@ -1418,10 +1410,10 @@ function renderLinkedQueue(
     elements.push(
       <Group key={`lq-node-${node.addr}`} name={`node-${node.addr}`}>
         <Rect name={`rect-${node.addr}`} x={x} y={y} width={NODE_W} height={NODE_H} cornerRadius={NODE_RADIUS}
-          fill={hasPointers ? '#e3f2fd' : '#fff'}
-          stroke={hasPointers ? '#1a73e8' : '#c0c0c0'}
+          fill={hasPointers ? '#e8eaf6' : '#fafafa'}
+          stroke={hasPointers ? '#3949ab' : '#d0d0d0'}
           strokeWidth={hasPointers ? 2 : 1}
-          shadowColor={hasPointers ? 'rgba(26,115,232,0.15)' : 'transparent'} shadowBlur={6}
+          shadowColor={hasPointers ? 'rgba(57,73,171,0.15)' : 'transparent'} shadowBlur={6}
         />
         <Text name={`label-${node.addr}`} text={nodeDisplayValue(node)}
           x={x} y={y} width={NODE_W} height={NODE_H}
@@ -1466,13 +1458,6 @@ function renderLinkedQueue(
       );
     }
   }
-
-  elements.push(
-    <Text key="struct-name" text={`${struct.annotation_name} (linked queue)`
-    } x={startX} y={CENTER_Y - NODE_H / 2 - 40}
-      fontSize={11} fill="#999" fontStyle="bold"
-    />
-  );
 
   return <Group key={struct.annotation_name}>{elements}</Group>;
 }
@@ -1563,30 +1548,18 @@ function renderHeap(
       <Group key={`heap-node-${node.addr}`} name={`node-${node.addr}`}
         x={pos.x} y={pos.y}>
         <Circle name={`rect-${node.addr}`} radius={TREE_NODE_RADIUS}
-          fill={hasPointers ? '#e8f5e9' : '#fff'}
-          stroke={hasPointers ? '#2e7d32' : '#c0c0c0'}
+          fill={hasPointers ? '#fff8e1' : '#fafafa'}
+          stroke={hasPointers ? '#ff8f00' : '#d0d0d0'}
           strokeWidth={hasPointers ? 2.5 : 1.5}
-          shadowColor={hasPointers ? 'rgba(46,125,50,0.15)' : 'transparent'} shadowBlur={6}
+          shadowColor={hasPointers ? 'rgba(255,143,0,0.15)' : 'transparent'} shadowBlur={6}
         />
         <Text name={`label-${node.addr}`} text={node.label}
           x={-TREE_NODE_RADIUS} y={-6} width={TREE_NODE_RADIUS * 2} height={16}
           align="center" verticalAlign="middle" fontSize={13} fontStyle="bold" fill="#333"
         />
-        <Text text={`[${i}]`}
-          x={-TREE_NODE_RADIUS} y={10} width={TREE_NODE_RADIUS * 2} height={12}
-          align="center" verticalAlign="middle" fontSize={8} fill="#bbb"
-        />
       </Group>
     );
   });
-
-  // Structure name
-  elements.push(
-    <Text key="struct-name" text={`${struct.annotation_name} (heap)`
-    } x={canvasSize.w / 2 - 30} y={6} width={60}
-      fontSize={11} fill="#999" fontStyle="bold" align="center"
-    />
-  );
 
   return <Group key={struct.annotation_name}>{elements}</Group>;
 }
@@ -1661,10 +1634,10 @@ function renderGraph(
       <Group key={`graph-node-${node.addr}`} name={`node-${node.addr}`}
         x={pos.x} y={pos.y}>
         <Circle name={`rect-${node.addr}`} radius={GRAPH_NODE_RADIUS}
-          fill={hasPointers ? '#e8f5e9' : '#fff'}
-          stroke={hasPointers ? '#2e7d32' : '#c0c0c0'}
+          fill={hasPointers ? '#f3e5f5' : '#fafafa'}
+          stroke={hasPointers ? '#7b1fa2' : '#d0d0d0'}
           strokeWidth={hasPointers ? 2.5 : 1.5}
-          shadowColor={hasPointers ? 'rgba(46,125,50,0.15)' : 'transparent'} shadowBlur={6}
+          shadowColor={hasPointers ? 'rgba(123,31,162,0.15)' : 'transparent'} shadowBlur={6}
         />
         <Text name={`label-${node.addr}`} text={node.label}
           x={-GRAPH_NODE_RADIUS} y={-6} width={GRAPH_NODE_RADIUS * 2} height={16}
@@ -1673,13 +1646,6 @@ function renderGraph(
       </Group>
     );
   });
-
-  elements.push(
-    <Text key="struct-name" text={`${struct.annotation_name} (graph)`
-    } x={cx - 30} y={cy - radius - 28} width={60}
-      fontSize={11} fill="#999" fontStyle="bold" align="center"
-    />
-  );
 
   return <Group key={struct.annotation_name}>{elements}</Group>;
 }
@@ -1741,10 +1707,6 @@ function renderHashmap(
         <Text name={`label-${node.addr}`} text={node.label}
           x={x + 36} y={y + 2} width={HMAP_BUCKET_W - 44} height={16}
           align="right" verticalAlign="middle" fontSize={12} fontStyle="bold" fill="#333"
-        />
-        <Text text={shortAddr(node.addr)}
-          x={x + 4} y={y + HMAP_BUCKET_H - 16} width={HMAP_BUCKET_W - 8} height={14}
-          align="left" verticalAlign="middle" fontSize={9} fill="#bbb"
         />
       </Group>
     );
@@ -1823,13 +1785,6 @@ function renderHashmap(
     });
   });
 
-  elements.push(
-    <Text key="struct-name" text={`${struct.annotation_name} (hashmap)`
-    } x={startX} y={startY - 28}
-      fontSize={11} fill="#999" fontStyle="bold"
-    />
-  );
-
   return <Group key={struct.annotation_name}>{elements}</Group>;
 }
 
@@ -1886,8 +1841,8 @@ function renderBinaryTree(
         <Circle
           name={`rect-${node.addr}`}
           radius={TREE_NODE_RADIUS}
-          fill={hasPointers ? '#e8f5e9' : '#fff'}
-          stroke={hasPointers ? '#2e7d32' : '#c0c0c0'}
+          fill={hasPointers ? '#e8f5e9' : '#fafafa'}
+          stroke={hasPointers ? '#2e7d32' : '#d0d0d0'}
           strokeWidth={hasPointers ? 2.5 : 1.5}
           shadowColor={hasPointers ? 'rgba(46,125,50,0.15)' : 'transparent'}
           shadowBlur={6}
@@ -1899,13 +1854,6 @@ function renderBinaryTree(
           width={TREE_NODE_RADIUS * 2} height={20}
           align="center" verticalAlign="middle"
           fontSize={13} fontStyle="bold" fill="#333"
-        />
-        <Text
-          text={shortAddr(node.addr)}
-          x={-TREE_NODE_RADIUS} y={10}
-          width={TREE_NODE_RADIUS * 2} height={14}
-          align="center" verticalAlign="middle"
-          fontSize={8} fill="#bbb"
         />
       </Group>
     );
@@ -1942,16 +1890,6 @@ function renderBinaryTree(
     });
   });
 
-  // Structure name label
-  elements.push(
-    <Text
-      key="struct-name"
-      text={struct.annotation_name}
-      x={canvasSize.w / 2 - 30} y={6}
-      width={60}
-      fontSize={11} fill="#999" fontStyle="bold" align="center"
-    />
-  );
 
   return <Group key={struct.annotation_name}>{elements}</Group>;
 }
@@ -1997,8 +1935,8 @@ function renderRecursionTree(
         <Rect name={`rect-${node.addr}`}
           width={NODE_W} height={NODE_H}
           cornerRadius={6}
-          fill={isActive ? '#e8f5e9' : '#f5f5f5'}
-          stroke={isActive ? '#2e7d32' : '#ccc'}
+          fill={isActive ? '#e0f7fa' : '#f5f5f5'}
+          stroke={isActive ? '#00838f' : '#ccc'}
           strokeWidth={isActive ? 2 : 1}
           opacity={isActive ? 1 : 0.5}
         />
@@ -2044,13 +1982,296 @@ function renderRecursionTree(
     });
   }
 
-  // Structure name
-  elements.push(
-    <Text key="struct-name" text={struct.annotation_name}
-      x={canvasSize.w / 2 - 30} y={4} width={60}
-      fontSize={11} fill="#999" fontStyle="bold" align="center"
-    />
-  );
+  return <Group key={struct.annotation_name}>{elements}</Group>;
+}
+
+// ---------------------------------------------------------------------------
+// B-tree rendering
+// ---------------------------------------------------------------------------
+
+const BTREE_KEY_W = 32;
+const BTREE_KEY_H = 28;
+const BTREE_KEY_GAP = 2;
+const BTREE_LAYER_GAP = 90;
+const BTREE_NODE_PAD = 10;
+
+interface BTreeNodeLayout {
+  x: number;
+  y: number;
+  width: number;
+  keys: string[];
+  addr: string;
+}
+
+function getBTreeLayout(
+  struct: HeapStructure,
+  canvasSize: { w: number; h: number },
+): { layouts: BTreeNodeLayout[]; edges: typeof struct.edges } | null {
+  const { nodes, edges } = struct;
+  if (nodes.length === 0) return null;
+
+  const depth: number[] = new Array(nodes.length).fill(0);
+  const children: number[][] = Array.from({ length: nodes.length }, () => []);
+
+  for (const e of edges) {
+    children[e.from_idx].push(e.to_idx);
+  }
+
+  const hasParent: boolean[] = new Array(nodes.length).fill(false);
+  for (const e of edges) hasParent[e.to_idx] = true;
+  const rootIdx = hasParent.findIndex((v) => !v);
+
+  const queue: number[] = [];
+  if (rootIdx >= 0) queue.push(rootIdx);
+  while (queue.length > 0) {
+    const cur = queue.shift()!;
+    for (const c of children[cur]) {
+      depth[c] = depth[cur] + 1;
+      queue.push(c);
+    }
+  }
+
+  const depthGroups = new Map<number, number[]>();
+  let maxDepth = 0;
+  for (let i = 0; i < nodes.length; i++) {
+    const d = depth[i];
+    if (!depthGroups.has(d)) depthGroups.set(d, []);
+    depthGroups.get(d)!.push(i);
+    maxDepth = Math.max(maxDepth, d);
+  }
+
+  const nodeWidths: number[] = [];
+  const nodeKeys: string[][] = [];
+  for (const node of nodes) {
+    const fields = node.fields as Record<string, string>;
+    const keysStr = fields._keys || '';
+    const keys = keysStr ? keysStr.split('|').filter(Boolean) : [node.label];
+    nodeKeys.push(keys);
+    const w = Math.max(60, keys.length * (BTREE_KEY_W + BTREE_KEY_GAP) + BTREE_NODE_PAD * 2);
+    nodeWidths.push(w);
+  }
+
+  const layouts: BTreeNodeLayout[] = [];
+  const startY = 30;
+
+  for (let d = 0; d <= maxDepth; d++) {
+    const group = depthGroups.get(d) || [];
+    if (group.length === 0) continue;
+
+    const y = startY + d * BTREE_LAYER_GAP;
+    const totalW = group.reduce((sum, idx) => sum + nodeWidths[idx] + 20, -20);
+    let x = Math.max(40, (canvasSize.w - totalW) / 2);
+
+    const sortedGroup = [...group].sort((a, b) => {
+      const edgeA = edges.find(e => e.to_idx === a);
+      const edgeB = edges.find(e => e.to_idx === b);
+      const slotA = parseInt(edgeA?.child_side || '0');
+      const slotB = parseInt(edgeB?.child_side || '0');
+      return (isNaN(slotA) ? 0 : slotA) - (isNaN(slotB) ? 0 : slotB);
+    });
+
+    for (const idx of sortedGroup) {
+      layouts.push({ x, y, width: nodeWidths[idx], keys: nodeKeys[idx], addr: nodes[idx].addr });
+      x += nodeWidths[idx] + 20;
+    }
+  }
+
+  return { layouts, edges };
+}
+
+function renderBTree(
+  struct: HeapStructure,
+  canvasSize: { w: number; h: number },
+) {
+  const result = getBTreeLayout(struct, canvasSize);
+  if (!result) {
+    return (
+      <Group key={`${struct.annotation_name}-empty`} x={canvasSize.w / 2 - 40} y={canvasSize.h / 2 - 20}>
+        <Rect width={80} height={40} cornerRadius={4} fill="#f5f5f5" stroke="#ccc" strokeWidth={1} />
+        <Text text="EMPTY" x={0} y={0} width={80} height={40} align="center" verticalAlign="middle" fontSize={12} fill="#999" fontStyle="bold" />
+      </Group>
+    );
+  }
+
+  const { layouts, edges } = result;
+  const { nodes } = struct;
+  const elements: React.ReactNode[] = [];
+  const nodeH = BTREE_KEY_H + BTREE_NODE_PAD * 2;
+
+  for (const edge of edges) {
+    const parentLayout = layouts.find(l => l.addr === nodes[edge.from_idx]?.addr);
+    const childLayout = layouts.find(l => l.addr === nodes[edge.to_idx]?.addr);
+    if (!parentLayout || !childLayout) continue;
+
+    const childSlot = parseInt(edge.child_side || '0');
+    const parentKeys = parentLayout.keys.length;
+    const arrowFromX = parentLayout.x + BTREE_NODE_PAD +
+      (childSlot > 0 ? childSlot * (BTREE_KEY_W + BTREE_KEY_GAP) - BTREE_KEY_GAP / 2 : BTREE_KEY_W / 2);
+    const arrowFromY = parentLayout.y + nodeH;
+
+    elements.push(
+      <Arrow
+        key={`bt-arrow-${edge.from_idx}-${edge.to_idx}`}
+        points={[arrowFromX, arrowFromY, childLayout.x + childLayout.width / 2, childLayout.y]}
+        pointerLength={6} pointerWidth={6}
+        fill="#8d6e63" stroke="#8d6e63" strokeWidth={1.5}
+      />
+    );
+  }
+
+  for (const layout of layouts) {
+    const node = nodes.find(n => n.addr === layout.addr);
+    const hasPointers = node ? node.pointers_pointing_here.length > 0 : false;
+
+    elements.push(
+      <Group key={`bt-node-${layout.addr}`} name={`node-${layout.addr}`}>
+        <Rect
+          name={`rect-${layout.addr}`}
+          x={layout.x} y={layout.y}
+          width={layout.width} height={nodeH}
+          cornerRadius={6}
+          fill={hasPointers ? '#efebe9' : '#fafafa'}
+          stroke={hasPointers ? '#6d4c41' : '#d0d0d0'}
+          strokeWidth={hasPointers ? 2 : 1}
+          shadowColor={hasPointers ? 'rgba(109,76,65,0.15)' : 'transparent'}
+          shadowBlur={6}
+        />
+        {layout.keys.map((key, ki) => {
+          const kx = layout.x + BTREE_NODE_PAD + ki * (BTREE_KEY_W + BTREE_KEY_GAP);
+          const ky = layout.y + BTREE_NODE_PAD;
+          return (
+            <Group key={`bt-key-${layout.addr}-${ki}`}>
+              <Rect
+                x={kx} y={ky}
+                width={BTREE_KEY_W} height={BTREE_KEY_H}
+                cornerRadius={3}
+                fill={hasPointers ? '#d7ccc8' : '#f5f5f5'}
+                stroke={hasPointers ? '#8d6e63' : '#e0e0e0'}
+                strokeWidth={1}
+              />
+              <Text
+                text={key}
+                x={kx} y={ky}
+                width={BTREE_KEY_W} height={BTREE_KEY_H}
+                align="center" verticalAlign="middle"
+                fontSize={12} fontStyle="bold" fill="#333"
+              />
+            </Group>
+          );
+        })}
+      </Group>
+    );
+  }
+
+  return <Group key={struct.annotation_name}>{elements}</Group>;
+}
+
+// ---------------------------------------------------------------------------
+// B+tree rendering
+// ---------------------------------------------------------------------------
+
+function renderBPlusTree(
+  struct: HeapStructure,
+  canvasSize: { w: number; h: number },
+) {
+  const result = getBTreeLayout(struct, canvasSize);
+  if (!result) {
+    return (
+      <Group key={`${struct.annotation_name}-empty`} x={canvasSize.w / 2 - 40} y={canvasSize.h / 2 - 20}>
+        <Rect width={80} height={40} cornerRadius={4} fill="#f5f5f5" stroke="#ccc" strokeWidth={1} />
+        <Text text="EMPTY" x={0} y={0} width={80} height={40} align="center" verticalAlign="middle" fontSize={12} fill="#999" fontStyle="bold" />
+      </Group>
+    );
+  }
+
+  const { layouts, edges } = result;
+  const { nodes } = struct;
+  const elements: React.ReactNode[] = [];
+  const nodeH = BTREE_KEY_H + BTREE_NODE_PAD * 2;
+
+  for (const edge of edges) {
+    const parentLayout = layouts.find(l => l.addr === nodes[edge.from_idx]?.addr);
+    const childLayout = layouts.find(l => l.addr === nodes[edge.to_idx]?.addr);
+    if (!parentLayout || !childLayout) continue;
+
+    const childSlot = parseInt(edge.child_side || '0');
+    const arrowFromX = parentLayout.x + BTREE_NODE_PAD +
+      (childSlot > 0 ? childSlot * (BTREE_KEY_W + BTREE_KEY_GAP) - BTREE_KEY_GAP / 2 : BTREE_KEY_W / 2);
+    const arrowFromY = parentLayout.y + nodeH;
+
+    elements.push(
+      <Arrow
+        key={`bpt-arrow-${edge.from_idx}-${edge.to_idx}`}
+        points={[arrowFromX, arrowFromY, childLayout.x + childLayout.width / 2, childLayout.y]}
+        pointerLength={6} pointerWidth={6}
+        fill="#689f38" stroke="#689f38" strokeWidth={1.5}
+      />
+    );
+  }
+
+  // Sibling arrows between leaf nodes (B+tree specific)
+  const leafLayouts = layouts.filter(l => {
+    const node = nodes.find(n => n.addr === l.addr);
+    return node && (node.fields as Record<string, string>)._is_leaf === 'true';
+  });
+  leafLayouts.sort((a, b) => a.x - b.x);
+  for (let i = 0; i < leafLayouts.length - 1; i++) {
+    const from = leafLayouts[i];
+    const to = leafLayouts[i + 1];
+    elements.push(
+      <Arrow
+        key={`bpt-sibling-${i}`}
+        points={[from.x + from.width, from.y + nodeH / 2, to.x, to.y + nodeH / 2]}
+        pointerLength={5} pointerWidth={5}
+        fill="#aed581" stroke="#aed581" strokeWidth={1.5}
+        dash={[4, 3]}
+      />
+    );
+  }
+
+  for (const layout of layouts) {
+    const node = nodes.find(n => n.addr === layout.addr);
+    const hasPointers = node ? node.pointers_pointing_here.length > 0 : false;
+
+    elements.push(
+      <Group key={`bpt-node-${layout.addr}`} name={`node-${layout.addr}`}>
+        <Rect
+          name={`rect-${layout.addr}`}
+          x={layout.x} y={layout.y}
+          width={layout.width} height={nodeH}
+          cornerRadius={6}
+          fill={hasPointers ? '#f1f8e9' : '#fafafa'}
+          stroke={hasPointers ? '#558b2f' : '#d0d0d0'}
+          strokeWidth={hasPointers ? 2 : 1}
+          shadowColor={hasPointers ? 'rgba(85,139,47,0.15)' : 'transparent'}
+          shadowBlur={6}
+        />
+        {layout.keys.map((key, ki) => {
+          const kx = layout.x + BTREE_NODE_PAD + ki * (BTREE_KEY_W + BTREE_KEY_GAP);
+          const ky = layout.y + BTREE_NODE_PAD;
+          return (
+            <Group key={`bpt-key-${layout.addr}-${ki}`}>
+              <Rect
+                x={kx} y={ky}
+                width={BTREE_KEY_W} height={BTREE_KEY_H}
+                cornerRadius={3}
+                fill={hasPointers ? '#dcedc8' : '#f5f5f5'}
+                stroke={hasPointers ? '#aed581' : '#e0e0e0'}
+                strokeWidth={1}
+              />
+              <Text
+                text={key}
+                x={kx} y={ky}
+                width={BTREE_KEY_W} height={BTREE_KEY_H}
+                align="center" verticalAlign="middle"
+                fontSize={12} fontStyle="bold" fill="#333"
+              />
+            </Group>
+          );
+        })}
+      </Group>
+    );
+  }
 
   return <Group key={struct.annotation_name}>{elements}</Group>;
 }
