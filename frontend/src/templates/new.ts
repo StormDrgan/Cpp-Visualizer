@@ -1,4 +1,6 @@
-export const NEW_TEMPLATES = [
+import type { Template } from './types';
+
+export const NEW_TEMPLATES: Template[] = [
   {
     id: 'btree_insert',
     label: 'B树插入 (2-3树)',
