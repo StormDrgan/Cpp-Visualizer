@@ -83,8 +83,9 @@ export default function CodeEditor() {
       if (e.target.type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) {
         const line = e.target.position?.lineNumber;
         if (line) {
-          // Alt+Click on glyph margin → add @viz annotation
-          if ((e.event as MouseEvent).altKey) {
+          // Ctrl+Click (Win) / Cmd+Click (Mac) / Alt+Click on glyph margin → add @viz annotation
+          const ev = e.event as MouseEvent;
+          if (ev.ctrlKey || ev.metaKey || ev.altKey) {
             e.event.preventDefault();
             e.event.stopPropagation();
             openVizPopup(line, (e.event as MouseEvent).clientX, (e.event as MouseEvent).clientY);
@@ -95,13 +96,15 @@ export default function CodeEditor() {
       }
     });
 
-    // Right-click → add @viz context menu
+    // Right-click → add @viz context menu (skip if Ctrl/Cmd/Alt held — handled by mouseDown)
     editor.onContextMenu((e: { event: MouseEvent; target: { type: unknown; position?: { lineNumber: number } } }) => {
+      const ev = e.event;
+      if (ev.ctrlKey || ev.metaKey || ev.altKey) return; // already handled in onMouseDown
       const line = e.target.position?.lineNumber;
       if (line) {
-        e.event.preventDefault();
-        e.event.stopPropagation();
-        openVizPopup(line, e.event.clientX, e.event.clientY);
+        ev.preventDefault();
+        ev.stopPropagation();
+        openVizPopup(line, ev.clientX, ev.clientY);
       }
     });
 
@@ -310,7 +313,7 @@ export default function CodeEditor() {
             <div style={{
               fontSize: 10, color: '#999', marginBottom: 8,
             }}>
-              Alt+点击行号左侧可快速添加 | 右键代码区同样触发
+              Ctrl/Cmd+点击行号左侧可快速添加 | 右键代码区同样触发
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4 }}>
               {STRUCT_TYPES.map((def) => (
