@@ -80,19 +80,24 @@ export default function CodeEditor() {
 
     // 点击行号区域设置断点
     editor.onMouseDown((e: { target: { type: unknown; position?: { lineNumber: number } }; event: MouseEvent }) => {
+      const ev = e.event as MouseEvent;
+      const line = e.target.position?.lineNumber;
+      if (!line) return;
+
+      const isGutter = e.target.type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN
+                    || e.target.type === monaco.editor.MouseTargetType.GUTTER_LINE_NUMBERS;
+
+      // Ctrl+Click (Win) / Cmd+Click (Mac) / Alt+Click on gutter → add @viz
+      if (isGutter && (ev.ctrlKey || ev.metaKey || ev.altKey)) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        openVizPopup(line, ev.clientX, ev.clientY);
+        return;
+      }
+
+      // Plain click on glyph margin → toggle breakpoint
       if (e.target.type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) {
-        const line = e.target.position?.lineNumber;
-        if (line) {
-          // Ctrl+Click (Win) / Cmd+Click (Mac) / Alt+Click on glyph margin → add @viz annotation
-          const ev = e.event as MouseEvent;
-          if (ev.ctrlKey || ev.metaKey || ev.altKey) {
-            e.event.preventDefault();
-            e.event.stopPropagation();
-            openVizPopup(line, (e.event as MouseEvent).clientX, (e.event as MouseEvent).clientY);
-          } else {
-            toggleBreakpoint(line);
-          }
-        }
+        toggleBreakpoint(line);
       }
     });
 
@@ -109,6 +114,30 @@ export default function CodeEditor() {
     });
 
     updateDecorations();
+
+    // Capture-phase listener on the editor DOM to beat Monaco's Cmd+Click multi-cursor
+    const editorDom = editor.getDomNode();
+    if (editorDom) {
+      editorDom.addEventListener('mousedown', (ev: MouseEvent) => {
+        if (!(ev.ctrlKey || ev.metaKey || ev.altKey)) return;
+        const target = ev.target as HTMLElement;
+        // Check if click is on a gutter element (glyph margin, line numbers, or margin overlays)
+        const inGutter = target.closest('.glyph-margin')
+                      || target.closest('.margin-view-overlays')
+                      || target.closest('.line-numbers')
+                      || target.closest('.margin');
+        if (!inGutter) return;
+
+        const pos = editor.getTargetAtClientPoint(ev.clientX, ev.clientY);
+        const ln = pos?.position?.lineNumber ?? null;
+        if (!ln) return;
+
+        ev.preventDefault();
+        ev.stopPropagation();
+        ev.stopImmediatePropagation();
+        openVizPopup(ln, ev.clientX, ev.clientY);
+      }, true); // capture phase — fires before Monaco's handler
+    }
   };
 
   /** Open the @viz type-selection popup near the click position */
