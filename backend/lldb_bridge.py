@@ -326,6 +326,16 @@ def handle_terminate(ctx: dict) -> None:
 # Helpers
 # ---------------------------------------------------------------------------
 
+def _is_null(addr: str) -> bool:
+    """Check if an address string represents a null pointer."""
+    if not addr:
+        return True
+    try:
+        return int(addr, 16) == 0
+    except ValueError:
+        return addr in ("nullptr", "NULL", "0x0", "0")
+
+
 def _wait_for_stop(process: lldb.SBProcess, timeout: float = 2.0) -> None:
     """Poll until the process stops or timeout."""
     import time

@@ -16,9 +16,18 @@ if LLDB_PYTHON not in sys.path:
 
 import lldb
 
-# Import shared utilities from the bridge (uses late-import pattern:
-# lldb_bridge defines these before importing from this module)
-from lldb_bridge import log, send_response, _get_thread, _is_null
+# Import shared utilities from the bridge.
+# When lldb_bridge.py is run directly (as __main__ via subprocess), its
+# functions live in __main__, not lldb_bridge.  A plain "from lldb_bridge
+# import …" would trigger a fresh import of lldb_bridge.py, causing a
+# circular import because lldb_bridge itself imports from this module.
+# Solution: grab the already-loaded module from sys.modules.
+import sys as _sys
+_bridge = _sys.modules.get('lldb_bridge') or _sys.modules['__main__']
+log = _bridge.log
+send_response = _bridge.send_response
+_get_thread = _bridge._get_thread
+_is_null = _bridge._is_null
 
 
 # ---------------------------------------------------------------------------
