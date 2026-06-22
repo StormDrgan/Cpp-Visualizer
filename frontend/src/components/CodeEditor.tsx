@@ -1,6 +1,7 @@
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect, useState } from 'react';
 import Editor, { type OnMount } from '@monaco-editor/react';
 import { useStore } from '../store/useStore';
+import { STRUCT_TYPES, detectVariables, insertAnnotationAbove } from '../utils/annotations';
 
 export default function CodeEditor() {
   const code = useStore((s) => s.code);
@@ -17,6 +18,15 @@ export default function CodeEditor() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const monacoRef = useRef<any>(null);
   const decorationsRef = useRef<string[]>([]);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // ---- @viz popup state ----
+  const [vizPopup, setVizPopup] = useState<{
+    visible: boolean;
+    top: number;
+    left: number;
+    targetLine: number;
+  } | null>(null);
 
   const updateDecorations = useCallback(() => {
     const ed = editorRef.current;
@@ -69,16 +79,85 @@ export default function CodeEditor() {
     monacoRef.current = monaco;
 
     // 点击行号区域设置断点
-    editor.onMouseDown((e: { target: { type: unknown; position?: { lineNumber: number } } }) => {
+    editor.onMouseDown((e: { target: { type: unknown; position?: { lineNumber: number } }; event: MouseEvent }) => {
       if (e.target.type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) {
         const line = e.target.position?.lineNumber;
         if (line) {
-          toggleBreakpoint(line);
+          // Alt+Click on glyph margin → add @viz annotation
+          if ((e.event as MouseEvent).altKey) {
+            e.event.preventDefault();
+            e.event.stopPropagation();
+            openVizPopup(line, (e.event as MouseEvent).clientX, (e.event as MouseEvent).clientY);
+          } else {
+            toggleBreakpoint(line);
+          }
         }
       }
     });
 
+    // Right-click → add @viz context menu
+    editor.onContextMenu((e: { event: MouseEvent; target: { type: unknown; position?: { lineNumber: number } } }) => {
+      const line = e.target.position?.lineNumber;
+      if (line) {
+        e.event.preventDefault();
+        e.event.stopPropagation();
+        openVizPopup(line, e.event.clientX, e.event.clientY);
+      }
+    });
+
     updateDecorations();
+  };
+
+  /** Open the @viz type-selection popup near the click position */
+  const openVizPopup = (line: number, clientX: number, clientY: number) => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    // Ensure popup stays within the container
+    const left = Math.min(clientX - rect.left, rect.width - 320);
+    const top = Math.min(clientY - rect.top, rect.height - 400);
+    setVizPopup({
+      visible: true,
+      top: Math.max(0, top),
+      left: Math.max(0, left),
+      targetLine: line,
+    });
+  };
+
+  /** Handle selecting a structure type from the popup */
+  const handleVizTypeSelect = (typeKey: string) => {
+    if (!vizPopup) return;
+    const def = STRUCT_TYPES.find((d) => d.type === typeKey);
+    if (!def) return;
+
+    // Try to auto-detect variables from the target line
+    const editor = editorRef.current;
+    const targetLine = vizPopup.targetLine;
+    let detectedVars: string[] = [];
+    if (editor) {
+      const lineText = editor.getModel()?.getLineContent(targetLine) ?? '';
+      detectedVars = detectVariables(lineText);
+    }
+
+    // Auto-fill fields based on detected variables and type
+    const fields: Record<string, string> = { name: 'auto' };
+    for (const field of def.fields) {
+      if (field.key === 'root_var' && detectedVars.length > 0) {
+        fields[field.key] = detectedVars[0];
+      } else if (field.key === 'name' && detectedVars.length > 0) {
+        fields[field.key] = detectedVars[0];
+      } else if (field.key === 'watched_vars') {
+        fields[field.key] = detectedVars.join(', ');
+      } else {
+        fields[field.key] = field.placeholder;
+      }
+    }
+
+    // Generate annotation and insert above the target line
+    // Strip the "// " prefix if format returns it
+    const annotation = def.format(fields.name ?? 'auto', fields);
+    const newCode = insertAnnotationAbove(code, targetLine, annotation);
+    setCode(newCode);
+    setVizPopup(null);
   };
 
   useEffect(() => {
@@ -99,7 +178,7 @@ export default function CodeEditor() {
   const isIdle = status === 'idle' || status === 'ready';
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }} onKeyDown={handleKeyDown}>
+    <div ref={containerRef} style={{ height: '100%', display: 'flex', flexDirection: 'column', position: 'relative' }} onKeyDown={handleKeyDown}>
       {/* 工具栏 */}
       <div
         style={{
@@ -168,7 +247,7 @@ export default function CodeEditor() {
       </div>
 
       {/* Monaco 编辑器 */}
-      <div style={{ flex: 1, minHeight: 0 }}>
+      <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
         <Editor
           height="100%"
           defaultLanguage="cpp"
@@ -194,6 +273,82 @@ export default function CodeEditor() {
             padding: { top: 8 },
           }}
         />
+
+        {/* @viz annotation popup — type selector */}
+        {vizPopup && vizPopup.visible && (
+          <div style={{
+            position: 'absolute',
+            top: vizPopup.top,
+            left: vizPopup.left,
+            zIndex: 100,
+            background: '#fff',
+            borderRadius: 8,
+            boxShadow: '0 6px 24px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.08)',
+            border: '1px solid #e0e0e0',
+            width: 300,
+            padding: '10px 12px 12px',
+          }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: 8,
+            }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: '#555' }}>
+                🏷️ 在第 {vizPopup.targetLine} 行上方添加标注
+              </span>
+              <button
+                onClick={() => setVizPopup(null)}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  fontSize: 14, color: '#bbb', padding: 0, lineHeight: 1,
+                }}
+              >
+                ×
+              </button>
+            </div>
+            <div style={{
+              fontSize: 10, color: '#999', marginBottom: 8,
+            }}>
+              Alt+点击行号左侧可快速添加 | 右键代码区同样触发
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4 }}>
+              {STRUCT_TYPES.map((def) => (
+                <button
+                  key={def.type}
+                  onClick={() => handleVizTypeSelect(def.type)}
+                  title={def.label}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    padding: '5px 6px',
+                    fontSize: 11,
+                    fontFamily: 'inherit',
+                    color: '#444',
+                    background: '#fafafa',
+                    border: '1px solid #f0f0f0',
+                    borderRadius: 4,
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    transition: 'all 0.1s',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = '#f0f7ff';
+                    e.currentTarget.style.borderColor = '#1a73e8';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = '#fafafa';
+                    e.currentTarget.style.borderColor = '#f0f0f0';
+                  }}
+                >
+                  <span style={{ fontSize: 13 }}>{def.icon}</span>
+                  <span style={{ whiteSpace: 'nowrap' }}>{def.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 编译错误面板 */}

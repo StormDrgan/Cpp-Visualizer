@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useStore } from '../store/useStore';
 import type { CandidateVar } from '../types';
+import AnnotationPanel from './AnnotationPanel';
 
 /** Shorten pointer addresses: "0x00005555555592b0 → {val=1}" → "…92b0 → {val=1}" */
 function fmtDisplay(v: { is_pointer: boolean; display_value: string; value: string }): string {
@@ -317,6 +318,9 @@ export default function VariablePanel() {
           )}
         </div>
       )}
+
+      {/* 标注管理 — @viz panel */}
+      <AnnotationPanel />
 
       {/* 调用栈 */}
       <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', flexShrink: showCallStack ? 0 : undefined }}>
