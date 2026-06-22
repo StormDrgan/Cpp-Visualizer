@@ -67,6 +67,17 @@ class MemoryWalker:
     def __init__(self, send_cmd: Callable[[dict], dict]):
         self._send = send_cmd
 
+    def evaluate_expr(self, expr: str) -> str:
+        """Evaluate a C++ expression via the LLDB bridge and return its value.
+
+        Used by @viz show() to read the current value of watched expressions
+        at each debug step.
+        """
+        resp = self._send({"cmd": "evaluate", "expression": expr})
+        if resp.get("ok"):
+            return str(resp.get("result", {}).get("value", ""))
+        return f"<{resp.get('error', '?')}>"
+
     def walk_linked_list(
         self,
         annotation_name: str,

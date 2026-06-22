@@ -352,6 +352,7 @@ using namespace std;
 
 // @viz stack(S) var=arr.top_var=top
 // @viz watch(top)
+// @viz show(top)
 int main() {
     int arr[10];
     int top = -1;  // 栈顶索引

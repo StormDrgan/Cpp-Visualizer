@@ -201,34 +201,39 @@ def handle_walk_array(cmd: dict, ctx: dict) -> None:
                     pass
             return 0
 
-        def _resolve_length_var(lvar: str, frame) -> int:
-            """Resolve length: evaluate as variable, fall back to literal integer."""
-            # Try evaluating as variable
+        def _resolve_length_var(lvar: str, frame) -> tuple[int, bool]:
+            """Resolve length: evaluate as variable, fall back to literal integer.
+
+            Returns (value, ok).  ok=True means the variable was successfully
+            resolved (value may be 0 — e.g. empty stack with top=-1 → top+1=0).
+            ok=False means the variable doesn't exist or couldn't be evaluated.
+            """
+            # Try evaluating as variable (LLDB expression)
             len_result = frame.EvaluateExpression(lvar)
             if len_result and len_result.GetError().Success():
                 try:
-                    return int(str(len_result.GetValue() or "0"))
+                    return int(str(len_result.GetValue() or "0")), True
                 except ValueError:
                     pass
             # Try parsing as literal integer
             try:
-                return int(lvar)
+                return int(lvar), True
             except ValueError:
                 pass
-            return 0
+            return 0, False
 
         type_N = _extract_size_from_type(var_name, frame)
 
         # Resolve length from the length_var (variable or literal)
-        var_N = _resolve_length_var(length_var, frame)
+        var_N, var_ok = _resolve_length_var(length_var, frame)
 
-        # Pick the reliable count
-        if type_N > 0 and var_N > 0:
-            N = min(type_N, var_N)
+        # Pick the reliable count.
+        # When var_ok is True we trust var_N even when it's 0 (empty container).
+        # When var_ok is False we fall back to type_N (the static array size).
+        if var_ok:
+            N = min(type_N, var_N) if type_N > 0 else var_N
         elif type_N > 0:
             N = type_N
-        elif var_N > 0:
-            N = var_N
         else:
             send_response({"ok": False,
                            "error": f"Cannot resolve array length: type_N={type_N}, var_N={var_N}"})

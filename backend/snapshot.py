@@ -59,6 +59,17 @@ def build_snapshot(
     # so the front-end can render a checkbox list (§v0.8 click-to-select).
     candidates = _build_candidates(heap_structures)
 
+    # Watched expressions: evaluate @viz show() variables at current step.
+    # Each entry is {expression, value} — the frontend renders them in the
+    # "监视表达式" panel.
+    watched_expressions: list[dict] = []
+    if annotations and walker:
+        for ann in annotations:
+            if ann.struct_type == "show":
+                for expr in ann.show_vars:
+                    val = walker.evaluate_expr(expr)
+                    watched_expressions.append({"expression": expr, "value": val})
+
     # v0.9: generate operation summary from current state
     operation_summary = debugger_state.current_function or ""
     if debugger_state.source_line:
@@ -71,7 +82,7 @@ def build_snapshot(
         "current_function": debugger_state.current_function,
         "call_stack": call_stack_list,
         "locals": locals_list,
-        "watched_expressions": [],
+        "watched_expressions": watched_expressions,
         "heap_structures": heap_structures,
         "candidates": candidates,
         "stdout": getattr(debugger_state, "stdout", ""),
@@ -180,7 +191,9 @@ def _build_heap_structures(
                 result = walker.walk_array(
                     annotation_name=ann.name,
                     root_var=ann.root_var,
-                    length_var=ann.top_var,  # top index determines visible elements
+                    # top is a 0-based index — add 1 to get element count.
+                    # LLDB evaluates e.g. (top)+1 → 5 when top=4 (5 elements).
+                    length_var=f"({ann.top_var}) + 1",
                     watched_vars=watched,
                 )
             structures.append(_traversal_to_dict(result))
