@@ -386,51 +386,6 @@ int main() {
 `,
   },
   {
-    id: 'queue_circular',
-    label: '循环队列',
-    icon: '🔄',
-    description: '数组循环队列 — front/rear 环绕移动',
-    code: `#include <iostream>
-using namespace std;
-
-// @viz queue(Q) var=queue.length_var=MAX.front_var=front.rear_var=rear
-// @viz watch(front, rear)
-int main() {
-    const int MAX = 6;
-    int queue[MAX] = {};
-    int front = 0, rear = 0;
-
-    // 入队 (enqueue)
-    auto enqueue = [&](int x) {
-        if ((rear + 1) % MAX != front) {  // 非满
-            queue[rear] = x;
-            rear = (rear + 1) % MAX;
-        }
-    };
-
-    // 出队 (dequeue)
-    auto dequeue = [&]() {
-        if (front != rear) {  // 非空
-            front = (front + 1) % MAX;
-        }
-    };
-
-    enqueue(10);
-    enqueue(20);
-    enqueue(30);
-    dequeue();           // 10 出队
-    enqueue(40);
-    enqueue(50);
-    enqueue(60);         // 队满 (留一个空位)
-    dequeue();           // 20 出队
-    enqueue(70);         // rear 绕回
-
-    cout << "front=" << front << " rear=" << rear << endl;
-    return 0;
-}
-`,
-  },
-  {
     id: 'queue_linked',
     label: '链式队列',
     icon: '🚶',

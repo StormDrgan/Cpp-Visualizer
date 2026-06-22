@@ -26,6 +26,10 @@ interface Store {
   historySteps: { step_number: number; source_line: number }[];
   jumpToStep: (targetStep: number) => Promise<void>;
 
+  // Current cursor line in the editor (for @viz annotation insertion)
+  cursorLine: number | null;
+  setCursorLine: (line: number | null) => void;
+
   createSession: () => Promise<void>;
   connectWs: (sessionId: string) => Promise<void>;
   disconnectWs: () => void;
@@ -68,6 +72,7 @@ export const useStore = create<Store>((set, get) => ({
   historySteps: [],
   selectedVars: new Set<string>(),
   candidates: [],
+  cursorLine: null,
 
   createSession: async () => {
     try {
@@ -388,6 +393,8 @@ export const useStore = create<Store>((set, get) => ({
   },
 
   clearError: () => set({ error: null, compileErrors: [] }),
+
+  setCursorLine: (line: number | null) => set({ cursorLine: line }),
 
   loadTemplate: (templateId: string) => {
     const template = TEMPLATES.find((t) => t.id === templateId);

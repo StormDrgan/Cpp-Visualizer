@@ -12,6 +12,7 @@ export default function CodeEditor() {
   const currentLine = useStore((s) => s.snapshot?.source_line ?? null);
   const status = useStore((s) => s.status);
   const compileErrors = useStore((s) => s.compileErrors);
+  const setCursorLine = useStore((s) => s.setCursorLine);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const editorRef = useRef<any>(null);
@@ -78,7 +79,7 @@ export default function CodeEditor() {
     editorRef.current = editor;
     monacoRef.current = monaco;
 
-    // 点击行号区域设置断点
+    // ---- LEFT CLICK on gutter → breakpoint (plain) or @viz (modifier) ----
     editor.onMouseDown((e: { target: { type: unknown; position?: { lineNumber: number } }; event: MouseEvent }) => {
       const ev = e.event as MouseEvent;
       const line = e.target.position?.lineNumber;
@@ -87,57 +88,50 @@ export default function CodeEditor() {
       const isGutter = e.target.type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN
                     || e.target.type === monaco.editor.MouseTargetType.GUTTER_LINE_NUMBERS;
 
-      // Ctrl+Click (Win) / Cmd+Click (Mac) / Alt+Click on gutter → add @viz
+      // Ctrl/Cmd/Alt + left-click on gutter → @viz (alternate shortcut)
       if (isGutter && (ev.ctrlKey || ev.metaKey || ev.altKey)) {
-        ev.preventDefault();
-        ev.stopPropagation();
         openVizPopup(line, ev.clientX, ev.clientY);
         return;
       }
 
-      // Plain click on glyph margin → toggle breakpoint
+      // Plain left-click on glyph margin → toggle breakpoint
       if (e.target.type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) {
         toggleBreakpoint(line);
       }
     });
 
-    // Right-click → add @viz context menu (skip if Ctrl/Cmd/Alt held — handled by mouseDown)
-    editor.onContextMenu((e: { event: MouseEvent; target: { type: unknown; position?: { lineNumber: number } } }) => {
-      const ev = e.event;
-      if (ev.ctrlKey || ev.metaKey || ev.altKey) return; // already handled in onMouseDown
-      const line = e.target.position?.lineNumber;
-      if (line) {
-        ev.preventDefault();
-        ev.stopPropagation();
-        openVizPopup(line, ev.clientX, ev.clientY);
-      }
-    });
-
-    updateDecorations();
-
-    // Capture-phase listener on the editor DOM to beat Monaco's Cmd+Click multi-cursor
+    // ---- RIGHT CLICK on gutter → @viz (primary method) ----
+    // Use DOM-level contextmenu listener instead of Monaco's onContextMenu,
+    // because Monaco's onContextMenu may not reliably report gutter targets.
     const editorDom = editor.getDomNode();
     if (editorDom) {
-      editorDom.addEventListener('mousedown', (ev: MouseEvent) => {
-        if (!(ev.ctrlKey || ev.metaKey || ev.altKey)) return;
+      editorDom.addEventListener('contextmenu', (ev: MouseEvent) => {
         const target = ev.target as HTMLElement;
-        // Check if click is on a gutter element (glyph margin, line numbers, or margin overlays)
+        // Check if click is on a gutter element
         const inGutter = target.closest('.glyph-margin')
                       || target.closest('.margin-view-overlays')
                       || target.closest('.line-numbers')
                       || target.closest('.margin');
-        if (!inGutter) return;
-
-        const pos = editor.getTargetAtClientPoint(ev.clientX, ev.clientY);
-        const ln = pos?.position?.lineNumber ?? null;
-        if (!ln) return;
+        if (!inGutter) return; // not gutter — let Monaco handle it
 
         ev.preventDefault();
         ev.stopPropagation();
-        ev.stopImmediatePropagation();
-        openVizPopup(ln, ev.clientX, ev.clientY);
-      }, true); // capture phase — fires before Monaco's handler
+
+        // Use coordinate-based target lookup for reliable line number
+        const pos = editor.getTargetAtClientPoint(ev.clientX, ev.clientY);
+        const ln = pos?.position?.lineNumber ?? null;
+        if (ln) {
+          openVizPopup(ln, ev.clientX, ev.clientY);
+        }
+      });
     }
+
+    updateDecorations();
+
+    // Track cursor line for @viz annotation insertion from panel
+    editor.onDidChangeCursorPosition((e: { position: { lineNumber: number } }) => {
+      setCursorLine(e.position.lineNumber);
+    });
   };
 
   /** Open the @viz type-selection popup near the click position */
@@ -195,6 +189,20 @@ export default function CodeEditor() {
   useEffect(() => {
     updateDecorations();
   }, [updateDecorations]);
+
+  // Close @viz popup when clicking outside
+  useEffect(() => {
+    if (!vizPopup) return;
+    const onMouseDown = (e: MouseEvent) => {
+      // Don't close if clicking inside the popup itself
+      const popupEl = document.querySelector('.viz-popup-overlay');
+      if (popupEl && popupEl.contains(e.target as Node)) return;
+      setVizPopup(null);
+    };
+    // Use mousedown (not click) so it fires before Monaco handlers
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, [vizPopup]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -308,7 +316,7 @@ export default function CodeEditor() {
 
         {/* @viz annotation popup — type selector */}
         {vizPopup && vizPopup.visible && (
-          <div style={{
+          <div className="viz-popup-overlay" style={{
             position: 'absolute',
             top: vizPopup.top,
             left: vizPopup.left,
@@ -342,7 +350,7 @@ export default function CodeEditor() {
             <div style={{
               fontSize: 10, color: '#999', marginBottom: 8,
             }}>
-              Ctrl/Cmd+点击行号左侧可快速添加 | 右键代码区同样触发
+              右键点击行号区域添加标注 | Ctrl/Cmd/Alt+左键也可触发
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4 }}>
               {STRUCT_TYPES.map((def) => (

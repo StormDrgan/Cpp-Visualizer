@@ -4,6 +4,7 @@ import {
   parseVizAnnotations,
   removeAnnotationLine,
   insertAnnotationAbove,
+  detectVariables,
   STRUCT_TYPES,
   type StructTypeDef,
 } from '../utils/annotations';
@@ -22,56 +23,47 @@ function typeLabel(st: string): string {
 export default function AnnotationPanel() {
   const code = useStore((s) => s.code);
   const setCode = useStore((s) => s.setCode);
+  const cursorLine = useStore((s) => s.cursorLine);
   const [collapsed, setCollapsed] = useState(false);
 
   const annotations = parseVizAnnotations(code);
 
-  // ---- Add form state ----
-  const [showForm, setShowForm] = useState(false);
-  const [formType, setFormType] = useState<StructTypeDef | null>(null);
-  const [formName, setFormName] = useState('');
-  const [formFields, setFormFields] = useState<Record<string, string>>({});
-  // line above which to insert (null = append at end)
-  const [insertLine, setInsertLine] = useState<number | null>(null);
+  // ---- Add form state (type selector only, no field form) ----
+  const [showTypeSelector, setShowTypeSelector] = useState(false);
 
   // ---- Delete ----
   const handleDelete = (line: number) => {
     setCode(removeAnnotationLine(code, line));
   };
 
-  // ---- Open add form ----
-  const openAddForm = (targetLine?: number) => {
-    setShowForm(true);
-    setFormType(null);
-    setFormName('');
-    setFormFields({});
-    setInsertLine(targetLine ?? null);
-  };
+  // ---- Select struct type → directly generate & insert ----
+  const handleTypeSelect = (def: StructTypeDef) => {
+    const targetLine = cursorLine;
+    if (!targetLine) return;
 
-  // ---- Select struct type ----
-  const selectType = (def: StructTypeDef) => {
-    setFormType(def);
-    setFormName('');
-    setFormFields({});
-  };
+    // Auto-detect variables from the cursor line
+    const lines = code.split('\n');
+    const lineText = lines[targetLine - 1] ?? '';
+    const detectedVars = detectVariables(lineText);
 
-  // ---- Submit form ----
-  const handleSubmit = () => {
-    if (!formType) return;
-    const name = formName || 'auto';
-    const annotation = formType.format(name, formFields);
-    if (insertLine != null) {
-      setCode(insertAnnotationAbove(code, insertLine, annotation));
-    } else {
-      // Append at end
-      setCode(code + '\n' + annotation);
+    // Build fields with auto-detected values
+    const fields: Record<string, string> = { name: 'auto' };
+    for (const field of def.fields) {
+      if (field.key === 'root_var' && detectedVars.length > 0) {
+        fields[field.key] = detectedVars[0];
+      } else if (field.key === 'name' && detectedVars.length > 0) {
+        fields[field.key] = detectedVars[0];
+      } else if (field.key === 'watched_vars') {
+        fields[field.key] = detectedVars.join(', ');
+      } else {
+        fields[field.key] = field.placeholder;
+      }
     }
-    // Reset
-    setShowForm(false);
-    setFormType(null);
-    setFormName('');
-    setFormFields({});
-    setInsertLine(null);
+
+    // Generate annotation and insert above the cursor line
+    const annotation = def.format(fields.name ?? 'auto', fields);
+    setCode(insertAnnotationAbove(code, targetLine, annotation));
+    setShowTypeSelector(false);
   };
 
   // ---- Summary text for an annotation ----
@@ -126,7 +118,7 @@ export default function AnnotationPanel() {
       {!collapsed && (
         <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
           {/* Annotation list */}
-          {annotations.length === 0 && !showForm ? (
+          {annotations.length === 0 && !showTypeSelector ? (
             <div style={{ fontSize: 12, color: '#bbb', padding: 16, textAlign: 'center', fontStyle: 'italic' }}>
               暂无标注 — 点击下方按钮或右键代码区添加
             </div>
@@ -196,185 +188,106 @@ export default function AnnotationPanel() {
           )}
 
           {/* Add button */}
-          {!showForm && (
+          {!showTypeSelector && (
             <button
-              onClick={() => openAddForm()}
+              onClick={() => setShowTypeSelector(true)}
+              disabled={!cursorLine}
+              title={cursorLine ? `在当前光标行 ${cursorLine} 上方插入标注` : '请先在代码编辑器中点击目标行'}
               style={{
                 margin: '8px 12px',
                 padding: '6px 12px',
                 fontSize: 11,
                 fontWeight: 500,
-                color: '#1a73e8',
-                background: '#f0f7ff',
-                border: '1px dashed #1a73e8',
+                color: cursorLine ? '#1a73e8' : '#bbb',
+                background: cursorLine ? '#f0f7ff' : '#f5f5f5',
+                border: cursorLine ? '1px dashed #1a73e8' : '1px dashed #ddd',
                 borderRadius: 4,
-                cursor: 'pointer',
+                cursor: cursorLine ? 'pointer' : 'not-allowed',
                 transition: 'all 0.15s',
               }}
               onMouseEnter={(e) => {
+                if (!cursorLine) return;
                 e.currentTarget.style.background = '#e3f0fd';
               }}
               onMouseLeave={(e) => {
+                if (!cursorLine) return;
                 e.currentTarget.style.background = '#f0f7ff';
               }}
             >
-              + 添加标注
+              {cursorLine ? `+ 在第 ${cursorLine} 行上方添加标注` : '+ 添加标注（先点击代码行）'}
             </button>
           )}
 
-          {/* Add form */}
-          {showForm && (
+          {/* Type selector (simplified — no field form) */}
+          {showTypeSelector && (
             <div style={{
               padding: '10px 12px',
               borderTop: '1px solid #e8e8e8',
               background: '#fafafa',
             }}>
-              {/* Step 1: Choose type */}
-              {!formType ? (
-                <>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: '#666', marginBottom: 8 }}>
-                    选择数据结构类型：
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4 }}>
-                    {STRUCT_TYPES.map((def) => (
-                      <button
-                        key={def.type}
-                        onClick={() => selectType(def)}
-                        title={def.label}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 4,
-                          padding: '5px 8px',
-                          fontSize: 11,
-                          fontFamily: 'inherit',
-                          color: '#444',
-                          background: '#fff',
-                          border: '1px solid #e0e0e0',
-                          borderRadius: 4,
-                          cursor: 'pointer',
-                          textAlign: 'left',
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = '#f0f7ff';
-                          e.currentTarget.style.borderColor = '#1a73e8';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = '#fff';
-                          e.currentTarget.style.borderColor = '#e0e0e0';
-                        }}
-                      >
-                        <span style={{ fontSize: 13 }}>{def.icon}</span>
-                        <span>{def.label}</span>
-                      </button>
-                    ))}
-                  </div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#666', marginBottom: 4 }}>
+                选择数据结构类型：
+              </div>
+              {cursorLine && (
+                <div style={{ fontSize: 10, color: '#999', marginBottom: 6 }}>
+                  将插入到第 {cursorLine} 行上方 · 变量名自动检测
+                </div>
+              )}
+              {!cursorLine && (
+                <div style={{ fontSize: 10, color: '#ef5350', marginBottom: 6 }}>
+                  ⚠ 未检测到光标位置，请先在代码编辑器中点击目标行
+                </div>
+              )}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4 }}>
+                {STRUCT_TYPES.map((def) => (
                   <button
-                    onClick={() => setShowForm(false)}
+                    key={def.type}
+                    onClick={() => handleTypeSelect(def)}
+                    disabled={!cursorLine}
+                    title={def.label}
                     style={{
-                      marginTop: 8,
-                      background: 'none',
-                      border: 'none',
-                      color: '#999',
-                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      padding: '5px 8px',
                       fontSize: 11,
-                      padding: 0,
+                      fontFamily: 'inherit',
+                      color: cursorLine ? '#444' : '#ccc',
+                      background: cursorLine ? '#fff' : '#f5f5f5',
+                      border: '1px solid #e0e0e0',
+                      borderRadius: 4,
+                      cursor: cursorLine ? 'pointer' : 'not-allowed',
+                      textAlign: 'left',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!cursorLine) return;
+                      e.currentTarget.style.background = '#f0f7ff';
+                      e.currentTarget.style.borderColor = '#1a73e8';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = cursorLine ? '#fff' : '#f5f5f5';
+                      e.currentTarget.style.borderColor = '#e0e0e0';
                     }}
                   >
-                    取消
+                    <span style={{ fontSize: 13 }}>{def.icon}</span>
+                    <span>{def.label}</span>
                   </button>
-                </>
-              ) : (
-                <>
-                  {/* Step 2: Fill fields */}
-                  <div style={{ fontSize: 11, fontWeight: 600, color: '#666', marginBottom: 6 }}>
-                    {formType.icon} {formType.label} — 填写参数：
-                  </div>
-
-                  {/* Name */}
-                  <div style={{ marginBottom: 6 }}>
-                    <label style={{ fontSize: 10, color: '#888', display: 'block', marginBottom: 2 }}>
-                      标注名（字母数字）
-                    </label>
-                    <input
-                      type="text"
-                      value={formName}
-                      onChange={(e) => setFormName(e.target.value)}
-                      placeholder="例如: L, T, A"
-                      style={{
-                        width: '100%',
-                        padding: '4px 8px',
-                        fontSize: 12,
-                        fontFamily: 'SF Mono, Menlo, Monaco, monospace',
-                        border: '1px solid #e0e0e0',
-                        borderRadius: 3,
-                        outline: 'none',
-                        boxSizing: 'border-box',
-                      }}
-                    />
-                  </div>
-
-                  {/* Type-specific fields */}
-                  {formType.fields.map((field) => (
-                    <div key={field.key} style={{ marginBottom: 6 }}>
-                      <label style={{ fontSize: 10, color: '#888', display: 'block', marginBottom: 2 }}>
-                        {field.label}
-                      </label>
-                      <input
-                        type="text"
-                        value={formFields[field.key] ?? ''}
-                        onChange={(e) =>
-                          setFormFields((prev) => ({ ...prev, [field.key]: e.target.value }))
-                        }
-                        placeholder={field.placeholder}
-                        style={{
-                          width: '100%',
-                          padding: '4px 8px',
-                          fontSize: 12,
-                          fontFamily: 'SF Mono, Menlo, Monaco, monospace',
-                          border: '1px solid #e0e0e0',
-                          borderRadius: 3,
-                          outline: 'none',
-                          boxSizing: 'border-box',
-                        }}
-                      />
-                    </div>
-                  ))}
-
-                  {/* Actions */}
-                  <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                    <button
-                      onClick={handleSubmit}
-                      style={{
-                        padding: '4px 14px',
-                        fontSize: 11,
-                        fontWeight: 600,
-                        color: '#fff',
-                        background: '#1a73e8',
-                        border: 'none',
-                        borderRadius: 3,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      插入标注
-                    </button>
-                    <button
-                      onClick={() => setShowForm(false)}
-                      style={{
-                        padding: '4px 10px',
-                        fontSize: 11,
-                        color: '#999',
-                        background: '#fff',
-                        border: '1px solid #e0e0e0',
-                        borderRadius: 3,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      取消
-                    </button>
-                  </div>
-                </>
-              )}
+                ))}
+              </div>
+              <button
+                onClick={() => setShowTypeSelector(false)}
+                style={{
+                  marginTop: 8,
+                  background: 'none',
+                  border: 'none',
+                  color: '#999',
+                  cursor: 'pointer',
+                  fontSize: 11,
+                  padding: 0,
+                }}
+              >
+                取消
+              </button>
             </div>
           )}
         </div>
