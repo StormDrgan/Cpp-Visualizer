@@ -10,7 +10,14 @@
       "Bash(python3 *)",
       "Bash(npx tsc *)",
       "Bash(./node_modules/.bin/tsc --noEmit)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(grep -n \"name={\\\\`node-\\\\|name={\\\\`rect-\\\\|name={\\\\`tree-node-\\\\|name={\\\\`heap-node-\\\\|name={\\\\`graph-node-\\\\|name={\\\\`hash-\\\\|name={\\\\`chain-\" /Users/ljc/Documents/Code/Test/cpp-visualizer/frontend/src/components/CanvasArea.tsx)",
+      "Bash(kill 73561)",
+      "Bash(nohup python main.py)",
+      "Bash(curl -s http://localhost:8000/health)",
+      "Bash(lsof -i :8000 -sTCP:LISTEN -t)",
+      "Bash(awk '{print $2, $3, $4}')",
+      "Bash(grep -n \"rect-\\\\$\\\\|name={\\\\`rect-\\\\|name.*rect-\" frontend/src/components/CanvasArea.tsx)"
     ]
   }
 }

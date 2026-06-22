@@ -386,6 +386,51 @@ int main() {
 `,
   },
   {
+    id: 'queue_circular',
+    label: '循环队列',
+    icon: '🔄',
+    description: '数组循环队列 — front/rear 环绕移动',
+    code: `#include <iostream>
+using namespace std;
+
+// @viz queue(Q) var=queue.length_var=MAX.front_var=front.rear_var=rear
+// @viz watch(front, rear)
+int main() {
+    const int MAX = 6;
+    int queue[MAX] = {};
+    int front = 0, rear = 0;
+
+    // 入队 (enqueue)
+    auto enqueue = [&](int x) {
+        if ((rear + 1) % MAX != front) {  // 非满
+            queue[rear] = x;
+            rear = (rear + 1) % MAX;
+        }
+    };
+
+    // 出队 (dequeue)
+    auto dequeue = [&]() {
+        if (front != rear) {  // 非空
+            front = (front + 1) % MAX;
+        }
+    };
+
+    enqueue(10);
+    enqueue(20);
+    enqueue(30);
+    dequeue();           // 10 出队
+    enqueue(40);
+    enqueue(50);
+    enqueue(60);         // 队满 (留一个空位)
+    dequeue();           // 20 出队
+    enqueue(70);         // rear 绕回
+
+    cout << "front=" << front << " rear=" << rear << endl;
+    return 0;
+}
+`,
+  },
+  {
     id: 'queue_linked',
     label: '链式队列',
     icon: '🚶',
@@ -429,6 +474,135 @@ int main() {
         cout << "front = " << front->val << endl;
     if (rear)
         cout << "rear = " << rear->val << endl;
+    return 0;
+}
+`,
+  },
+  {
+    id: 'huffman_tree',
+    label: '哈夫曼树',
+    icon: '🌲',
+    description: '哈夫曼树构建 — 带权路径长度最小化',
+    code: `#include <iostream>
+#include <climits>
+using namespace std;
+
+struct HuffmanNode {
+    int weight;
+    HuffmanNode* left;
+    HuffmanNode* right;
+    HuffmanNode(int w) : weight(w), left(nullptr), right(nullptr) {}
+};
+
+// @viz binary_tree(T) root=root.left_field=left.right_field=right
+// @viz watch(curr, min1, min2)
+int main() {
+    // 创建叶子节点（初始森林）
+    HuffmanNode* nodes[] = {
+        new HuffmanNode(5),
+        new HuffmanNode(7),
+        new HuffmanNode(10),
+        new HuffmanNode(15),
+        new HuffmanNode(20),
+        new HuffmanNode(25),
+    };
+    int count = 6;
+
+    // 哈夫曼合并过程：每次选两个最小权重的节点合并
+    while (count > 1) {
+        // 找最小和次小权重的节点
+        int m1 = INT_MAX, m2 = INT_MAX;
+        int i1 = -1, i2 = -1;
+        for (int i = 0; i < count; i++) {
+            if (nodes[i]->weight < m1) {
+                m2 = m1; i2 = i1;
+                m1 = nodes[i]->weight; i1 = i;
+            } else if (nodes[i]->weight < m2) {
+                m2 = nodes[i]->weight; i2 = i;
+            }
+        }
+        HuffmanNode* min1 = nodes[i1];
+        HuffmanNode* min2 = nodes[i2];
+
+        // 合并为一个新节点
+        HuffmanNode* parent = new HuffmanNode(min1->weight + min2->weight);
+        parent->left = min1;
+        parent->right = min2;
+
+        // 用新节点替换合并的两个节点
+        nodes[i1] = parent;
+        nodes[i2] = nodes[count - 1];
+        count--;
+    }
+
+    HuffmanNode* root = nodes[0];
+    cout << "Huffman root weight = " << root->weight << endl;
+    return 0;
+}
+`,
+  },
+  {
+    id: 'deque_array',
+    label: '双端队列',
+    icon: '↔️',
+    description: '数组循环双端队列 — 两端均可入队/出队',
+    code: `#include <iostream>
+using namespace std;
+
+// @viz array(D) var=deque.length_var=N
+// @viz watch(front, rear)
+int main() {
+    const int N = 8;
+    int deque[N] = {};
+    int front = 3;  // 前端指针
+    int rear = 3;   // 后端指针
+    int size = 0;
+
+    // 后端入队 (push_back)
+    auto push_back = [&](int x) {
+        if (size < N) {
+            deque[rear] = x;
+            rear = (rear + 1) % N;
+            size++;
+        }
+    };
+
+    // 前端入队 (push_front)
+    auto push_front = [&](int x) {
+        if (size < N) {
+            front = (front - 1 + N) % N;
+            deque[front] = x;
+            size++;
+        }
+    };
+
+    // 后端出队 (pop_back)
+    auto pop_back = [&]() {
+        if (size > 0) {
+            rear = (rear - 1 + N) % N;
+            size--;
+        }
+    };
+
+    // 前端出队 (pop_front)
+    auto pop_front = [&]() {
+        if (size > 0) {
+            front = (front + 1) % N;
+            size--;
+        }
+    };
+
+    // 操作序列
+    push_back(10);   // [10, _, _, _, _, _, _, _]
+    push_back(20);   // [10, 20, _, _, _, _, _, _]
+    push_front(5);   // [10, 20, _, _, _, _, _, 5]
+    push_front(1);   // [10, 20, _, _, _, _, 1, 5]
+    push_back(30);   // [10, 20, 30, _, _, _, 1, 5]
+    pop_front();     // [10, 20, 30, _, _, _, 1, _]
+    push_back(40);   // [10, 20, 30, 40, _, _, 1, _]
+    pop_back();      // [10, 20, 30, _, _, _, 1, _]
+
+    cout << "front=" << front << " rear=" << rear << " size=" << size << endl;
     return 0;
 }
 `,
@@ -518,6 +692,101 @@ int main() {
             cout << cur->to << " ";
             cur = cur->next;
         }
+        cout << endl;
+    }
+    return 0;
+}
+`,
+  },
+  {
+    id: 'graph_adjmatrix',
+    label: '邻接矩阵图',
+    icon: '🕸️',
+    description: '邻接矩阵存储的有向图结构',
+    code: `#include <iostream>
+using namespace std;
+
+// @viz graph(G) var=mat.mode=matrix.size_var=n
+int main() {
+    int n = 5;  // 5 个顶点 0-4
+    int mat[5][5] = {0};
+
+    // 构建有向图:
+    // 0 → 1, 3
+    // 1 → 2
+    // 2 → 0, 3, 4
+    // 3 → 4
+    // 4 → 1
+    mat[0][1] = 1; mat[0][3] = 1;
+    mat[1][2] = 1;
+    mat[2][0] = 1; mat[2][3] = 1; mat[2][4] = 1;
+    mat[3][4] = 1;
+    mat[4][1] = 1;
+
+    // 输出邻接矩阵 + 统计出度
+    for (int i = 0; i < n; i++) {
+        int out = 0;
+        for (int j = 0; j < n; j++) {
+            if (mat[i][j]) out++;
+            cout << mat[i][j] << " ";
+        }
+        cout << "| out=" << out << endl;
+    }
+    return 0;
+}
+`,
+  },
+  {
+    id: 'hashmap_open_addressing',
+    label: '哈希表（开放定址法）',
+    icon: '#️⃣',
+    description: '线性探测开放定址哈希表',
+    code: `#include <iostream>
+using namespace std;
+
+// 开放定址哈希表项
+struct Entry {
+    int key;
+    int val;
+    bool occupied;  // 标记槽位是否被占用
+};
+
+// @viz hashmap(H) var=table.mode=open_addressing
+int main() {
+    const int M = 11;
+    Entry table[M] = {};
+    for (int i = 0; i < M; i++) {
+        table[i].key = 0;
+        table[i].val = 0;
+        table[i].occupied = false;
+    }
+
+    // 线性探测插入
+    auto put = [&](int key, int val) {
+        int idx = key % M;
+        while (table[idx].occupied) {
+            idx = (idx + 1) % M;  // 线性探测
+        }
+        table[idx].key = key;
+        table[idx].val = val;
+        table[idx].occupied = true;
+    };
+
+    put(10, 100);
+    put(22, 220);  // 22 % 11 = 0 → 冲突！探测到槽 1
+    put(33, 330);  // 33 % 11 = 0 → 又冲突！探测到槽 2
+    put(15, 150);  // 15 % 11 = 4
+    put(26, 260);  // 26 % 11 = 4 → 冲突！探测到槽 5
+    put(7, 70);
+    put(18, 180);  // 18 % 11 = 7 → 冲突！探测到槽 8
+
+    // 输出哈希表
+    for (int i = 0; i < M; i++) {
+        cout << "[" << i << "] ";
+        if (table[i].occupied)
+            cout << table[i].key << " -> " << table[i].val;
+        else
+            cout << "empty";
         cout << endl;
     }
     return 0;

@@ -5,7 +5,6 @@ import CodeEditor from './components/CodeEditor';
 import CanvasArea from './components/CanvasArea';
 import VariablePanel from './components/VariablePanel';
 import ControlBar from './components/ControlBar';
-import HistoryPanel from './components/HistoryPanel';
 
 /** Thickness of the drag-to-resize divider bars */
 const DIVIDER = 5;
@@ -54,7 +53,7 @@ export default function App() {
         setSplitX(Math.min(75, Math.max(20, pct)));
       } else {
         const topY = rect.top + 44;
-        const bottomY = rect.bottom - 44;
+        const bottomY = rect.bottom - 40;
         const rightHeight = bottomY - topY;
         const mouseY = e.clientY - topY;
         const pct = (mouseY / rightHeight) * 100;
@@ -81,7 +80,7 @@ export default function App() {
         width: '100vw',
         height: '100vh',
         display: 'grid',
-        gridTemplateRows: '44px 1fr auto',
+        gridTemplateRows: '44px 1fr 40px',
         gridTemplateColumns: `${splitX}% ${DIVIDER}px 1fr`,
         overflow: 'hidden',
         fontFamily: '-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif',
@@ -148,7 +147,6 @@ export default function App() {
 
       {/* 底栏 — 跨所有列 */}
       <div style={{ gridColumn: '1 / -1', gridRow: 3 }}>
-        <HistoryPanel />
         <ControlBar />
       </div>
     </div>
