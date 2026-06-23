@@ -13,10 +13,10 @@ export function getStackLayout(
   const startY = Math.max(30, (canvasSize.h - nodes.length * (STACK_CELL_H + STACK_GAP)) / 2);
   const positions: Record<string, { x: number; y: number; cx: number; cy: number }> = {};
 
-  // Stack grows downward — index 0 at bottom, top at... well, top
+  // Stack grows upward — index 0 (first pushed) at bottom, top at top
   nodes.forEach((node, i) => {
     const x = startX;
-    const y = startY + i * (STACK_CELL_H + STACK_GAP);
+    const y = startY + (nodes.length - 1 - i) * (STACK_CELL_H + STACK_GAP);
     positions[node.addr] = { x, y, cx: x + STACK_CELL_W / 2, cy: y + STACK_CELL_H / 2 };
   });
 

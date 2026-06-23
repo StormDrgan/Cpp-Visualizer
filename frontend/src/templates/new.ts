@@ -243,6 +243,46 @@ int main() {
   },
 
   {
+    id: 'stack_linked',
+    label: '链式栈',
+    icon: '📚',
+    description: '链式栈 push/pop 操作（指针实现）',
+    code: `#include <iostream>
+using namespace std;
+
+// @viz stack(S) var=top.next_field=next
+// @viz show(cur, top)
+struct SNode {
+    int val;
+    SNode* next;
+    SNode(int x, SNode* n = nullptr) : val(x), next(n) {}
+};
+
+int main() {
+    SNode* top = nullptr;
+    SNode* cur;
+
+    // push 5 个元素
+    top = new SNode(10, top);
+    top = new SNode(20, top);
+    top = new SNode(30, top);
+    top = new SNode(40, top);
+    top = new SNode(50, top);
+
+    // pop 2 个元素
+    cur = top; top = top->next; delete cur;
+    cur = top; top = top->next; delete cur;
+
+    // push 1 个元素
+    top = new SNode(99, top);
+
+    cout << "top = " << top->val << endl;
+    return 0;
+}
+`,
+  },
+
+  {
     id: 'doubly_linked_list',
     label: '双向链表',
     icon: '🔗',

@@ -15,7 +15,7 @@ const CATEGORIES: Category[] = [
   },
   {
     name: '栈 / 队列',
-    ids: ['stack_sequential', 'queue_circular', 'queue_linked', 'deque_array'],
+    ids: ['stack_sequential', 'stack_linked', 'queue_circular', 'queue_linked', 'deque_array'],
   },
   {
     name: '树',

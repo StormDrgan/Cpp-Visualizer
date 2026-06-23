@@ -184,7 +184,9 @@ def _build_heap_structures(
                     length_var=f"({ann.top_var}) + 1",
                     show_vars=show_vars_list,
                 )
-            structures.append(_traversal_to_dict(result))
+            sdict = _traversal_to_dict(result)
+            sdict["structure_type"] = "stack"  # override walk_array/linked_list default
+            structures.append(sdict)
         elif ann.struct_type == "queue":
             # Circular queue: reuse array; linked queue: reuse linked_list
             if ann.next_field:
@@ -203,7 +205,9 @@ def _build_heap_structures(
                     length_var=ann.length_var or ann.rear_var,
                     show_vars=show_vars_list,
                 )
-            structures.append(_traversal_to_dict(result))
+            sdict = _traversal_to_dict(result)
+            sdict["structure_type"] = "queue"  # override walk_array/linked_list default
+            structures.append(sdict)
         elif ann.struct_type == "heap":
             # Binary heap (array-based) — walk the array, render as tree
             result = walker.walk_array(
@@ -212,7 +216,9 @@ def _build_heap_structures(
                 length_var=ann.length_var,
                 show_vars=show_vars_list,
             )
-            structures.append(_traversal_to_dict(result))
+            sdict = _traversal_to_dict(result)
+            sdict["structure_type"] = "heap"  # override walk_array default
+            structures.append(sdict)
         elif ann.struct_type == "graph":
             result = walker.walk_graph(
                 annotation_name=ann.name,

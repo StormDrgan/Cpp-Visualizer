@@ -77,26 +77,27 @@ export function renderSequentialStack(
     );
   });
 
-  // Top of stack indicator (arrow pointing to the last element)
+  // Top of stack indicator — arrow from above pointing down to the top element
   if (nodes.length > 0) {
     const topNode = nodes[nodes.length - 1];
     const topPos = positions[topNode.addr];
     if (topPos) {
-      const arrowX = topPos.x + STACK_CELL_W + 12;
-      const arrowY = topPos.cy;
+      const labelY = topPos.y - 26;
       elements.push(
         <Fragment key="top-indicator">
           <Line
-            points={[topPos.x + STACK_CELL_W, topPos.cy, arrowX, arrowY]}
-            stroke="#e65100" strokeWidth={1.5}
+            points={[topPos.cx, labelY + 14, topPos.cx, topPos.y]}
+            stroke="#e65100" strokeWidth={1} dash={[3, 3]}
           />
-          <Arrow
-            points={[arrowX - 2, arrowY - 6, arrowX, arrowY, arrowX + 6, arrowY - 6]}
-            fill="#e65100" stroke="#e65100" strokeWidth={1.5}
-            pointerLength={6} pointerWidth={6}
+          <Rect
+            x={topPos.cx - 14} y={labelY}
+            width={28} height={16} cornerRadius={3}
+            fill="#fff3e0" stroke="#e65100" strokeWidth={1}
           />
-          <Text text="top" x={arrowX + 6} y={arrowY - 9}
-            fontSize={10} fill="#e65100" fontStyle="bold"
+          <Text text="top" x={topPos.cx - 14} y={labelY}
+            width={28} height={16}
+            align="center" verticalAlign="middle"
+            fontSize={10} fontStyle="bold" fill="#e65100"
           />
         </Fragment>
       );
@@ -123,12 +124,15 @@ export function renderLinkedStack(
     );
   }
 
-  // Vertical layout: top node at top, growing downward
+  // Vertical layout: stack grows upward — last node (top) at smallest y
   const startX = canvasSize.w / 2 - NODE_W / 2;
-  const startY = 50;
   const vGap = NODE_H + 16;
+  const totalH = nodes.length * NODE_H + (nodes.length - 1) * vGap;
+  const startY = Math.max(50, (canvasSize.h - totalH) / 2);
 
   const positions: Record<string, { x: number; y: number; cx: number; cy: number }> = {};
+  // Linked list walker returns nodes head→tail (top→bottom).
+  // Top (last pushed) at smallest y, bottom (first pushed) at largest y.
   nodes.forEach((node, i) => {
     const x = startX;
     const y = startY + i * vGap;
@@ -176,24 +180,22 @@ export function renderLinkedStack(
     );
   });
 
-  // "top" label pointing to the first node (top of stack)
+  // "top" label — linked list head is the stack top (nodes[0])
   if (nodes.length > 0) {
-    const topPos = positions[nodes[0].addr];
+    const topNode = nodes[0];
+    const topPos = positions[topNode.addr];
     if (topPos) {
+      const labelY = topPos.y - 26;
       elements.push(
         <Fragment key="top-label">
-          <Line points={[topPos.cx - NODE_W / 2 - 24, topPos.cy, topPos.x - 4, topPos.cy]}
-            stroke="#e65100" strokeWidth={1.5}
+          <Line
+            points={[topPos.cx, labelY + 14, topPos.cx, topPos.y]}
+            stroke="#e65100" strokeWidth={1} dash={[3, 3]}
           />
-          <Arrow
-            points={[topPos.x - 10, topPos.cy - 6, topPos.x - 4, topPos.cy, topPos.x - 10, topPos.cy + 6]}
-            fill="#e65100" stroke="#e65100" strokeWidth={1.5}
-            pointerLength={6} pointerWidth={6}
-          />
-          <Rect x={topPos.x - NODE_W / 2 - 48} y={topPos.cy - 8} width={24} height={16} cornerRadius={3}
+          <Rect x={topPos.cx - 14} y={labelY} width={28} height={16} cornerRadius={3}
             fill="#fff3e0" stroke="#e65100" strokeWidth={1}
           />
-          <Text text="top" x={topPos.x - NODE_W / 2 - 48} y={topPos.cy - 8} width={24} height={16}
+          <Text text="top" x={topPos.cx - 14} y={labelY} width={28} height={16}
             align="center" verticalAlign="middle" fontSize={10} fontStyle="bold" fill="#e65100"
           />
         </Fragment>
