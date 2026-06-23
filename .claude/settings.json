@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /Users/ljc/Documents/Code/Test/cpp-visualizer status)",
+      "Bash(git -C /Users/ljc/Documents/Code/Test/cpp-visualizer diff)",
+      "Bash(git -C /Users/ljc/Documents/Code/Test/cpp-visualizer add backend/lldb_bridge.py backend/lldb_walkers.py)",
+      "Bash(git -C /Users/ljc/Documents/Code/Test/cpp-visualizer commit -m \"fix: 修复 lldb_bridge 循环导入 + _is_null 误删 → 点击运行无反应\")",
+      "Bash(git -C /Users/ljc/Documents/Code/Test/cpp-visualizer push)",
+      "Bash(pkill -f \"python.*main.py\")",
+      "Bash(python main.py)",
+      "Bash(git -C /Users/ljc/Documents/Code/Test/cpp-visualizer diff --stat)",
+      "Bash(git -C /Users/ljc/Documents/Code/Test/cpp-visualizer add backend/annotations.py backend/lldb_walkers.py backend/memory_walker.py backend/snapshot.py frontend/src/components/VariablePanel.tsx frontend/src/templates/builtin.ts)",
+      "Bash(git -C /Users/ljc/Documents/Code/Test/cpp-visualizer commit -m 'feat: 修复栈节点计数\\(top+1\\) + 新增 @viz show\\(\\) 监视表达式注解 *)"
+    ]
+  }
+}

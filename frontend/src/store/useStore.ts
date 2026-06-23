@@ -456,16 +456,44 @@ export const useStore = create<Store>((set, get) => ({
   /** Auto-populate selectedVars from the candidates in the current snapshot.
    *  Called internally when a new snapshot arrives — ensures new variables
    *  are selected by default.  If selectedVars is already populated from a
-   *  previous step we keep it (so user toggles persist across steps). */
+   *  previous step we keep it (so user toggles persist across steps).
+   *  Also auto-selects @viz show() variables from pointers_pointing_here. */
   autoInitSelectedVars: () => {
     const s = get();
     const snap = s.snapshot;
     const candidates = snap?.candidates ?? [];
-    if (candidates.length === 0) return;
-    // If selectedVars is empty, default to all-on
-    if (s.selectedVars.size === 0) {
-      set({ selectedVars: new Set(candidates.map((c) => c.var_name)) });
+
+    // Collect @viz show() variable names from pointers_pointing_here
+    const showVars: string[] = [];
+    for (const struct of (snap?.heap_structures ?? [])) {
+      for (const node of struct.nodes) {
+        for (const ptr of (node.pointers_pointing_here ?? [])) {
+          showVars.push(ptr);
+        }
+      }
     }
+
+    // Merge candidates + show vars as default visualization targets
+    const allDefaultVars = new Set([
+      ...candidates.map((c) => c.var_name),
+      ...showVars,
+    ]);
+
+    if (allDefaultVars.size === 0 && candidates.length === 0) return;
+
+    // If selectedVars is empty, default to all-on (candidates + show vars)
+    if (s.selectedVars.size === 0) {
+      set({ selectedVars: allDefaultVars });
+    } else {
+      // Auto-add any newly appeared show vars (don't override user's manual deselections)
+      const newShowVars = showVars.filter((v) => !s.selectedVars.has(v));
+      if (newShowVars.length > 0) {
+        const updated = new Set(s.selectedVars);
+        newShowVars.forEach((v) => updated.add(v));
+        set({ selectedVars: updated });
+      }
+    }
+
     // v0.9: append step to history
     if (snap && snap.step_number > 0) {
       const existing = s.historySteps;

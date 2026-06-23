@@ -17,7 +17,16 @@
       "Bash(curl -s http://localhost:8000/health)",
       "Bash(lsof -i :8000 -sTCP:LISTEN -t)",
       "Bash(awk '{print $2, $3, $4}')",
-      "Bash(grep -n \"rect-\\\\$\\\\|name={\\\\`rect-\\\\|name.*rect-\" frontend/src/components/CanvasArea.tsx)"
+      "Bash(grep -n \"rect-\\\\$\\\\|name={\\\\`rect-\\\\|name.*rect-\" frontend/src/components/CanvasArea.tsx)",
+      "Bash(git checkout *)",
+      "Bash(curl -s http://localhost:5100/api/sessions)",
+      "Bash(curl -s -X POST http://localhost:5100/api/sessions -H 'Content-Type: application/json' -d '{\"template_id\": \"stack_sequential\"}')",
+      "Bash(brew list *)",
+      "Bash(/opt/anaconda3/bin/python3.11 -m pip install -r /Users/ljc/Documents/Code/Test/cpp-visualizer/backend/requirements.txt)",
+      "Bash(/opt/anaconda3/bin/python3.11 /Users/ljc/Documents/Code/Test/cpp-visualizer/backend/main.py)",
+      "Bash(curl -s http://localhost:8000/api/sessions)",
+      "Bash(curl -s -X POST http://localhost:8000/api/sessions -H 'Content-Type: application/json' -d '{\"template_id\": \"stack_sequential\"}')",
+      "Bash(python3.11 -m json.tool)"
     ]
   }
 }
