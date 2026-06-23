@@ -23,7 +23,8 @@ export function getStructBounds(struct: HeapStructure, canvasSize: { w: number; 
     const layout = getArrayLayout(struct, canvasSize);
     return layout?.bounds ?? emptyBounds;
   }
-  if (type === 'stack' && !hasNext) {
+  if (type === 'stack') {
+    // All stacks use vertical layout (sequential + linked)
     const layout = getStackLayout(struct, canvasSize);
     return layout?.bounds ?? emptyBounds;
   }
@@ -31,7 +32,7 @@ export function getStructBounds(struct: HeapStructure, canvasSize: { w: number; 
     const layout = getQueueLayout(struct, canvasSize);
     return layout?.bounds ?? emptyBounds;
   }
-  if (type === 'queue' || type === 'stack') {
+  if (type === 'queue') {
     const layout = getLinkedListLayout(struct, canvasSize);
     return layout?.bounds ?? emptyBounds;
   }

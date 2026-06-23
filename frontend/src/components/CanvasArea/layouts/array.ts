@@ -1,6 +1,6 @@
 import type { HeapStructure } from '../../../types';
 import type { ArrayLayout, ContentBounds } from '../types';
-import { ARRAY_CELL_W, ARRAY_GAP, ARRAY_START_Y, ARRAY_CELL_H, CONTENT_MARGIN, START_X } from '../constants';
+import { ARRAY_CELL_W, ARRAY_GAP, ARRAY_CELL_H, CONTENT_MARGIN, START_X } from '../constants';
 
 export function getArrayLayout(
   struct: HeapStructure,
@@ -13,9 +13,10 @@ export function getArrayLayout(
   const startX = Math.max(START_X, (canvasSize.w - totalWidth) / 2);
 
   const positions: Record<string, { x: number; y: number; cx: number; cy: number }> = {};
+  const cellY = Math.max(30, (canvasSize.h - ARRAY_CELL_H) / 2);
   nodes.forEach((node, i) => {
     const x = startX + i * (ARRAY_CELL_W + ARRAY_GAP);
-    const y = ARRAY_START_Y;
+    const y = cellY;
     positions[node.addr] = { x, y, cx: x + ARRAY_CELL_W / 2, cy: y + ARRAY_CELL_H / 2 };
   });
 
@@ -30,8 +31,8 @@ export function getArrayLayout(
   const bounds: ContentBounds = {
     minX: startX - CONTENT_MARGIN,
     maxX: startX + totalWidth + CONTENT_MARGIN,
-    minY: ARRAY_START_Y - 32,
-    maxY: ARRAY_START_Y + ARRAY_CELL_H + indexLabelExtra + bottomExtra,
+    minY: cellY - 32,
+    maxY: cellY + ARRAY_CELL_H + indexLabelExtra + bottomExtra,
   };
 
   return { positions, startX, bounds };

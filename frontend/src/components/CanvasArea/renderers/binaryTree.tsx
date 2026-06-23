@@ -67,39 +67,32 @@ export function renderBinaryTree(
           align="center" verticalAlign="middle"
           fontSize={13} fontStyle="bold" fill="#333"
         />
+        {/* Pointer labels — inside the node Group so they move with the node */}
+        {node.pointers_pointing_here.map((ptr, pi) => {
+          const labelY = TREE_NODE_RADIUS + 8 + pi * 18;
+          return (
+            <Fragment key={`ptr-${node.addr}-${ptr}`}>
+              <Line
+                points={[0, TREE_NODE_RADIUS, 0, labelY - 2]}
+                stroke="#e65100" strokeWidth={1} dash={[3, 3]}
+              />
+              <Rect
+                x={-24} y={labelY}
+                width={48} height={16} cornerRadius={3}
+                fill="#fff3e0" stroke="#e65100" strokeWidth={1}
+              />
+              <Text
+                text={ptr}
+                x={-24} y={labelY}
+                width={48} height={16}
+                align="center" verticalAlign="middle"
+                fontSize={9} fontStyle="bold" fill="#e65100"
+              />
+            </Fragment>
+          );
+        })}
       </Group>
     );
-
-    // Pointer labels
-    const ptrs = node.pointers_pointing_here;
-    ptrs.forEach((ptr, pi) => {
-      const labelY = TREE_NODE_RADIUS + 8 + pi * 18;
-      elements.push(
-        <Line
-          key={`ptr-line-${node.addr}-${ptr}`}
-          points={[0, TREE_NODE_RADIUS, 0, labelY - 2]}
-          stroke="#e65100" strokeWidth={1} dash={[3, 3]}
-        />
-      );
-      elements.push(
-        <Rect
-          key={`ptr-bg-${node.addr}-${ptr}`}
-          x={-24} y={labelY}
-          width={48} height={16} cornerRadius={3}
-          fill="#fff3e0" stroke="#e65100" strokeWidth={1}
-        />
-      );
-      elements.push(
-        <Text
-          key={`ptr-text-${node.addr}-${ptr}`}
-          text={ptr}
-          x={-24} y={labelY}
-          width={48} height={16}
-          align="center" verticalAlign="middle"
-          fontSize={9} fontStyle="bold" fill="#e65100"
-        />
-      );
-    });
   });
 
 

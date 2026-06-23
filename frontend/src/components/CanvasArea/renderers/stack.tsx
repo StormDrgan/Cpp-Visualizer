@@ -1,9 +1,8 @@
 import { Fragment } from 'react';
 import { Rect, Text, Arrow, Group, Line } from 'react-konva';
 import type { HeapStructure } from '../../../types';
-import { NODE_W, NODE_H, NODE_GAP, NODE_RADIUS, START_X, CENTER_Y, STACK_CELL_W, STACK_CELL_H, STACK_START_X, STACK_START_Y, STACK_GAP } from '../constants';
+import { NODE_W, NODE_H, NODE_RADIUS, STACK_CELL_W, STACK_CELL_H, STACK_GAP } from '../constants';
 import { nodeDisplayValue } from '../utils';
-import { getLinkedListLayout } from '../layouts/linkedList';
 import { getStackLayout } from '../layouts/stack';
 
 export function renderStack(
@@ -113,9 +112,8 @@ export function renderLinkedStack(
   struct: HeapStructure,
   canvasSize: { w: number; h: number },
 ) {
-  // Reuse linked list layout with "top" label instead of "head"
-  const layout = getLinkedListLayout(struct, canvasSize);
-  if (!layout) {
+  const { nodes } = struct;
+  if (nodes.length === 0) {
     return (
       <Group key={`${struct.annotation_name}-empty`} x={canvasSize.w / 2 - 40} y={canvasSize.h / 2 - 20}>
         <Rect width={80} height={40} cornerRadius={4} fill="#f5f5f5" stroke="#ccc" strokeWidth={1} />
@@ -125,11 +123,21 @@ export function renderLinkedStack(
     );
   }
 
-  const { positions, startX } = layout;
-  const { nodes } = struct;
+  // Vertical layout: top node at top, growing downward
+  const startX = canvasSize.w / 2 - NODE_W / 2;
+  const startY = 50;
+  const vGap = NODE_H + 16;
+
+  const positions: Record<string, { x: number; y: number; cx: number; cy: number }> = {};
+  nodes.forEach((node, i) => {
+    const x = startX;
+    const y = startY + i * vGap;
+    positions[node.addr] = { x, y, cx: x + NODE_W / 2, cy: y + NODE_H / 2 };
+  });
+
   const elements: React.ReactNode[] = [];
 
-  // Arrows between nodes
+  // Arrows between nodes (downward, from top to bottom)
   for (let i = 0; i < nodes.length - 1; i++) {
     const from = positions[nodes[i].addr];
     const to = positions[nodes[i + 1].addr];
@@ -137,7 +145,7 @@ export function renderLinkedStack(
       elements.push(
         <Arrow
           key={`arrow-${i}`}
-          points={[from.cx + NODE_W / 2 + 4, from.cy, to.cx - NODE_W / 2 - 4, to.cy]}
+          points={[from.cx, from.y + NODE_H + 2, to.cx, to.y - 2]}
           pointerLength={8} pointerWidth={8}
           fill="#888" stroke="#888" strokeWidth={2}
         />
@@ -168,19 +176,24 @@ export function renderLinkedStack(
     );
   });
 
-  // "top" label pointing to first node
+  // "top" label pointing to the first node (top of stack)
   if (nodes.length > 0) {
     const topPos = positions[nodes[0].addr];
     if (topPos) {
       elements.push(
         <Fragment key="top-label">
-          <Line points={[topPos.cx, topPos.y - 18, topPos.cx, topPos.y - 4]}
-            stroke="#e65100" strokeWidth={1.5} dash={[3, 3]}
+          <Line points={[topPos.cx - NODE_W / 2 - 24, topPos.cy, topPos.x - 4, topPos.cy]}
+            stroke="#e65100" strokeWidth={1.5}
           />
-          <Rect x={topPos.cx - 16} y={topPos.y - 34} width={32} height={16} cornerRadius={3}
+          <Arrow
+            points={[topPos.x - 10, topPos.cy - 6, topPos.x - 4, topPos.cy, topPos.x - 10, topPos.cy + 6]}
+            fill="#e65100" stroke="#e65100" strokeWidth={1.5}
+            pointerLength={6} pointerWidth={6}
+          />
+          <Rect x={topPos.x - NODE_W / 2 - 48} y={topPos.cy - 8} width={24} height={16} cornerRadius={3}
             fill="#fff3e0" stroke="#e65100" strokeWidth={1}
           />
-          <Text text="top" x={topPos.cx - 16} y={topPos.y - 34} width={32} height={16}
+          <Text text="top" x={topPos.x - NODE_W / 2 - 48} y={topPos.cy - 8} width={24} height={16}
             align="center" verticalAlign="middle" fontSize={10} fontStyle="bold" fill="#e65100"
           />
         </Fragment>

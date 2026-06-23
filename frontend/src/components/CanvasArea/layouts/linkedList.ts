@@ -1,6 +1,6 @@
 import type { HeapStructure } from '../../../types';
 import type { LLLayout, ContentBounds } from '../types';
-import { NODE_W, NODE_GAP, START_X, CENTER_Y, NODE_H, CONTENT_MARGIN } from '../constants';
+import { NODE_W, NODE_GAP, START_X, NODE_H, CONTENT_MARGIN } from '../constants';
 
 export function getLinkedListLayout(
   struct: HeapStructure,
@@ -13,9 +13,10 @@ export function getLinkedListLayout(
   const startX = Math.max(START_X, (canvasSize.w - totalWidth) / 2);
 
   const positions: Record<string, { x: number; y: number; cx: number; cy: number }> = {};
+  const centerY = Math.max(NODE_H / 2 + 30, canvasSize.h / 2);
   nodes.forEach((node, i) => {
     const x = startX + i * (NODE_W + NODE_GAP);
-    const y = CENTER_Y - NODE_H / 2;
+    const y = centerY - NODE_H / 2;
     positions[node.addr] = { x, y, cx: x + NODE_W / 2, cy: y + NODE_H / 2 };
   });
 
@@ -29,8 +30,8 @@ export function getLinkedListLayout(
   const bounds: ContentBounds = {
     minX: startX - CONTENT_MARGIN,
     maxX: startX + totalWidth + 60, // room for nullptr symbol
-    minY: CENTER_Y - NODE_H / 2 - 36, // struct name label above
-    maxY: CENTER_Y + NODE_H / 2 + bottomExtra,
+    minY: centerY - NODE_H / 2 - 36, // struct name label above
+    maxY: centerY + NODE_H / 2 + bottomExtra,
   };
 
   return { positions, startX, bounds };

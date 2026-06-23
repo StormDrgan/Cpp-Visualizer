@@ -1,6 +1,6 @@
 import type { HeapStructure } from '../../../types';
 import type { BTLayout } from '../types';
-import { TREE_LEVEL_H } from '../constants';
+import { TREE_LEVEL_H, TREE_NODE_RADIUS } from '../constants';
 
 export function getBinaryTreeLayout(
   struct: HeapStructure,
@@ -45,6 +45,13 @@ export function getBinaryTreeLayout(
   const positions: Record<number, { x: number; y: number }> = {};
   const startY = 30;
 
+  // Build map from edge to know left/right for single-child positioning
+  const edgeSide: Record<number, Record<number, string>> = {};
+  for (const e of edges) {
+    if (!edgeSide[e.from_idx]) edgeSide[e.from_idx] = {};
+    edgeSide[e.from_idx][e.to_idx] = e.child_side;
+  }
+
   function placeSubtree(idx: number): number {
     const cs = children[idx];
     if (cs.length === 0) {
@@ -58,6 +65,17 @@ export function getBinaryTreeLayout(
     // Position children first (post-order), collect their x positions
     const childX: number[] = cs.map((c) => placeSubtree(c));
 
+    if (cs.length === 1) {
+      // Single child: offset parent so child leans to its correct side
+      const child = cs[0];
+      const side = edgeSide[idx]?.[child] ?? '';
+      const childXVal = childX[0];
+      const offset = LEAF_GAP * 0.6;
+      const x = side === 'left' ? childXVal + offset : childXVal - offset;
+      positions[idx] = { x, y: startY + depth[idx] * TREE_LEVEL_H };
+      return x;
+    }
+
     // Parent x = midpoint of leftmost and rightmost child
     const minX = Math.min(...childX);
     const maxX = Math.max(...childX);
@@ -68,12 +86,52 @@ export function getBinaryTreeLayout(
 
   placeSubtree(rootIdx);
 
-  // 4. Compute bounds from actual positions
+  // 4. Ensure minimum spacing between nodes at the same depth (prevent overlap)
+  const nodesByDepth: number[][] = Array.from({ length: maxDepth + 1 }, () => []);
+  for (let i = 0; i < nodes.length; i++) {
+    nodesByDepth[depth[i]].push(i);
+  }
+  const MIN_NODE_GAP = TREE_NODE_RADIUS * 2 + 16; // minimum center-to-center distance
+
+  for (let d = 0; d <= maxDepth; d++) {
+    const row = nodesByDepth[d].sort((a, b) => (positions[a]?.x ?? 0) - (positions[b]?.x ?? 0));
+    for (let j = 1; j < row.length; j++) {
+      const prev = positions[row[j - 1]];
+      const cur = positions[row[j]];
+      if (!prev || !cur) continue;
+      const gap = cur.x - prev.x;
+      if (gap < MIN_NODE_GAP) {
+        // Shift current node and all nodes to its right
+        const shift = MIN_NODE_GAP - gap;
+        for (let k = j; k < row.length; k++) {
+          const p = positions[row[k]];
+          if (p) p.x += shift;
+        }
+      }
+    }
+  }
+
+  // 5. Center the tree within canvas
   const allXs = Object.values(positions).map((p) => p.x);
-  const minX = Math.min(...allXs) - 60;
-  const maxX = Math.max(...allXs) + 60;
-  const minY = startY - 10;
-  const maxY = startY + maxDepth * TREE_LEVEL_H + 50;
+  const rawMinX = Math.min(...allXs);
+  const rawMaxX = Math.max(...allXs);
+  const rawMinY = startY;
+  const rawMaxY = startY + maxDepth * TREE_LEVEL_H;
+  const contentW = rawMaxX - rawMinX;
+  const contentH = rawMaxY - rawMinY;
+  const offsetX = (canvasSize.w - contentW) / 2 - rawMinX;
+  const offsetY = Math.max(30, (canvasSize.h - contentH) / 2 - rawMinY);
+
+  for (const key of Object.keys(positions)) {
+    const p = positions[Number(key)];
+    p.x += offsetX;
+    p.y += offsetY;
+  }
+
+  const minX = rawMinX + offsetX - 60;
+  const maxX = rawMaxX + offsetX + 60;
+  const minY = rawMinY + offsetY - 10;
+  const maxY = rawMaxY + offsetY + 50;
 
   return { positions, bounds: { minX, maxX, minY, maxY } };
 }

@@ -1,7 +1,7 @@
 import { Fragment } from 'react';
 import { Rect, Text, Arrow, Group, Line } from 'react-konva';
 import type { HeapStructure } from '../../../types';
-import { NODE_W, NODE_H, NODE_GAP, NODE_RADIUS, START_X, CENTER_Y, QUEUE_CELL_W, QUEUE_CELL_H } from '../constants';
+import { NODE_W, NODE_H, NODE_GAP, NODE_RADIUS, START_X, QUEUE_CELL_W, QUEUE_CELL_H } from '../constants';
 import { nodeDisplayValue } from '../utils';
 import { getLinkedListLayout } from '../layouts/linkedList';
 import { getQueueLayout } from '../layouts/queue';

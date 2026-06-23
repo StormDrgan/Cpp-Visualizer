@@ -124,6 +124,125 @@ int main() {
 `,
   },
   {
+    id: 'btree_search',
+    label: 'B树搜索',
+    icon: '🌲',
+    description: 'B-tree 搜索 — m=3 阶查找',
+    code: `#include <iostream>
+using namespace std;
+
+struct BNode {
+    int keys[4];
+    BNode* children[5];
+    int n;
+    bool leaf;
+    BNode() : n(0), leaf(true) {
+        for (int i = 0; i < 5; i++) children[i] = nullptr;
+        for (int i = 0; i < 4; i++) keys[i] = 0;
+    }
+};
+
+// @viz b_tree(BT) root=root.order=3
+// @viz show(cur)
+int main() {
+    BNode* root = new BNode();
+    root->keys[0] = 10; root->keys[1] = 20; root->n = 2;
+
+    BNode* c1 = new BNode();
+    c1->keys[0] = 5; c1->n = 1;
+    BNode* c2 = new BNode();
+    c2->keys[0] = 15; c2->n = 1;
+    BNode* c3 = new BNode();
+    c3->keys[0] = 25; c3->keys[1] = 30; c3->n = 2;
+
+    root->children[0] = c1;
+    root->children[1] = c2;
+    root->children[2] = c3;
+    root->leaf = false;
+
+    int target = 15;
+    BNode* cur = root;
+    bool found = false;
+    while (cur) {
+        int i = 0;
+        while (i < cur->n && target > cur->keys[i]) i++;
+        if (i < cur->n && cur->keys[i] == target) {
+            found = true; break;
+        }
+        if (cur->leaf) break;
+        cur = cur->children[i];
+    }
+    cout << "search " << target << " = " << (found ? "found" : "not found") << endl;
+    return 0;
+}
+`,
+  },
+  {
+    id: 'bplustree_insert',
+    label: 'B+树插入',
+    icon: '🌿',
+    description: 'B+树插入构建 — m=4 阶, 叶子链表',
+    code: `#include <iostream>
+using namespace std;
+
+struct BPNode {
+    int keys[5];
+    BPNode* children[6];
+    int n;
+    bool leaf;
+    BPNode* next;
+    BPNode() : n(0), leaf(true), next(nullptr) {
+        for (int i = 0; i < 6; i++) children[i] = nullptr;
+        for (int i = 0; i < 5; i++) keys[i] = 0;
+    }
+};
+
+// @viz bplustree(BP) root=root.order=4
+// @viz show(cur)
+int main() {
+    BPNode* root = new BPNode();
+    int vals[] = {8, 3, 10, 1, 6, 14, 4, 7, 13};
+    BPNode* cur;
+    for (int vi = 0; vi < 9; vi++) {
+        int k = vals[vi];
+        if (root->n == 0) {
+            root->keys[0] = k; root->n = 1;
+            continue;
+        }
+        cur = root;
+        // Find leaf
+        while (!cur->leaf) {
+            int ci = cur->n;
+            for (int j = 0; j < cur->n; j++) {
+                if (k < cur->keys[j]) { ci = j; break; }
+            }
+            cur = cur->children[ci];
+        }
+        // Insert into leaf (simplified, no split for demo)
+        int pos = cur->n - 1;
+        while (pos >= 0 && cur->keys[pos] > k) {
+            cur->keys[pos + 1] = cur->keys[pos];
+            pos--;
+        }
+        cur->keys[pos + 1] = k;
+        cur->n++;
+        // Link leaves
+        if (vi > 0 && vi % 3 == 0) {
+            BPNode* prev = root;
+            while (!prev->leaf) prev = prev->children[0];
+            while (prev->next) prev = prev->next;
+            cur->next = new BPNode();
+            cur->next->keys[0] = vals[vi+1];
+            cur->next->n = 1;
+        }
+    }
+    cout << "B+tree built, root keys=" << root->keys[0] << endl;
+    return 0;
+}
+`,
+  },
+
+  {
     id: 'doubly_linked_list',
     label: '双向链表',
     icon: '🔗',

@@ -9,13 +9,14 @@ export function getStackLayout(
   const nodes = struct.nodes;
   if (nodes.length === 0) return null;
 
-  const startX = STACK_START_X;
+  const startX = Math.max(60, (canvasSize.w - STACK_CELL_W) / 2);
+  const startY = Math.max(30, (canvasSize.h - nodes.length * (STACK_CELL_H + STACK_GAP)) / 2);
   const positions: Record<string, { x: number; y: number; cx: number; cy: number }> = {};
 
   // Stack grows downward — index 0 at bottom, top at... well, top
   nodes.forEach((node, i) => {
     const x = startX;
-    const y = STACK_START_Y + i * (STACK_CELL_H + STACK_GAP);
+    const y = startY + i * (STACK_CELL_H + STACK_GAP);
     positions[node.addr] = { x, y, cx: x + STACK_CELL_W / 2, cy: y + STACK_CELL_H / 2 };
   });
 
@@ -26,8 +27,8 @@ export function getStackLayout(
   const bounds: ContentBounds = {
     minX: startX - CONTENT_MARGIN,
     maxX: startX + STACK_CELL_W + rightExtra,
-    minY: STACK_START_Y - 36,
-    maxY: STACK_START_Y + nodes.length * (STACK_CELL_H + STACK_GAP) + 40,
+    minY: startY - 36,
+    maxY: startY + nodes.length * (STACK_CELL_H + STACK_GAP) + 40,
   };
 
   return { positions, bounds };

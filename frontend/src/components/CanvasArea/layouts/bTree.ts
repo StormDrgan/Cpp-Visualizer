@@ -51,7 +51,7 @@ export function getBTreeLayout(
   }
 
   const layouts: BTreeNodeLayout[] = [];
-  const startY = 30;
+  const startY = Math.max(30, (canvasSize.h - (maxDepth + 1) * BTREE_LAYER_GAP) / 2);
 
   for (let d = 0; d <= maxDepth; d++) {
     const group = depthGroups.get(d) || [];

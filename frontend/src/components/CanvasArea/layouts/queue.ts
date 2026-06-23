@@ -1,6 +1,6 @@
 import type { HeapStructure } from '../../../types';
 import type { QueueLayout, ContentBounds } from '../types';
-import { QUEUE_CELL_W, QUEUE_CELL_H, START_X, CONTENT_MARGIN, CENTER_Y, ARRAY_GAP } from '../constants';
+import { QUEUE_CELL_W, QUEUE_CELL_H, START_X, CONTENT_MARGIN, ARRAY_GAP } from '../constants';
 
 export function getQueueLayout(
   struct: HeapStructure,
@@ -11,7 +11,8 @@ export function getQueueLayout(
 
   const totalWidth = nodes.length * QUEUE_CELL_W + (nodes.length - 1) * ARRAY_GAP;
   const startX = Math.max(START_X, (canvasSize.w - totalWidth) / 2);
-  const startY = CENTER_Y - QUEUE_CELL_H / 2;
+  const centerY = Math.max(QUEUE_CELL_H / 2 + 36, canvasSize.h / 2);
+  const startY = centerY - QUEUE_CELL_H / 2;
 
   const positions: Record<string, { x: number; y: number; cx: number; cy: number }> = {};
   nodes.forEach((node, i) => {

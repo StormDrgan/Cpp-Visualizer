@@ -1,7 +1,7 @@
 import { Fragment } from 'react';
 import { Rect, Text, Arrow, Group, Circle } from 'react-konva';
 import type { HeapStructure } from '../../../types';
-import { GRAPH_NODE_RADIUS, GRAPH_CENTER_X, GRAPH_CENTER_Y, GRAPH_RADIUS } from '../constants';
+import { GRAPH_NODE_RADIUS, GRAPH_RADIUS } from '../constants';
 
 export function renderGraph(
   struct: HeapStructure,
@@ -18,10 +18,10 @@ export function renderGraph(
     );
   }
 
-  // Circular layout for graph vertices
-  const cx = GRAPH_CENTER_X;
-  const cy = GRAPH_CENTER_Y;
-  const radius = GRAPH_RADIUS;
+  // Circular layout for graph vertices — centered in viewport
+  const cx = canvasSize.w / 2;
+  const cy = canvasSize.h / 2;
+  const radius = Math.min(GRAPH_RADIUS, Math.min(canvasSize.w, canvasSize.h) * 0.35);
   const vertexCount = nodes.length;
 
   const positions: { x: number; y: number }[] = [];

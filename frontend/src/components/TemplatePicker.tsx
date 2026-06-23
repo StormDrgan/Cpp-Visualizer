@@ -33,6 +33,10 @@ const CATEGORIES: Category[] = [
     name: '哈希表',
     ids: ['hashmap_chaining', 'hashmap_open_addressing'],
   },
+  {
+    name: 'B树 / B+树',
+    ids: ['btree_insert', 'btree_search', 'bplustree_search', 'bplustree_insert'],
+  },
 ];
 
 // Build a quick lookup map

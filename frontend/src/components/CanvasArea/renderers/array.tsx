@@ -1,7 +1,7 @@
 import { Fragment } from 'react';
 import { Rect, Text, Group, Line } from 'react-konva';
 import type { HeapStructure } from '../../../types';
-import { ARRAY_CELL_W, ARRAY_CELL_H, ARRAY_GAP, ARRAY_START_Y, START_X } from '../constants';
+import { ARRAY_CELL_W, ARRAY_CELL_H, ARRAY_GAP } from '../constants';
 import { getArrayLayout } from '../layouts/array';
 
 export function renderArray(
@@ -69,15 +69,18 @@ export function renderArray(
   nodes.forEach((node) => {
     const ptrs = node.pointers_pointing_here;
     if (ptrs.length === 0) return;
-    const { cx } = positions[node.addr];
+    const pos = positions[node.addr];
+    if (!pos) return;
+    const { cx, y } = pos;
+    const cellBottom = y + ARRAY_CELL_H;
 
     ptrs.forEach((ptr, pi) => {
-      const labelY = ARRAY_START_Y + ARRAY_CELL_H + 22 + pi * 20;
+      const labelY = cellBottom + 22 + pi * 20;
 
       elements.push(
         <Line
           key={`ptr-line-${node.addr}-${ptr}`}
-          points={[cx, ARRAY_START_Y + ARRAY_CELL_H + 18, cx, labelY - 4]}
+          points={[cx, cellBottom + 18, cx, labelY - 4]}
           stroke="#e65100" strokeWidth={1} dash={[3, 3]}
         />
       );

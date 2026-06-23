@@ -24,6 +24,15 @@ export function renderRecursionTree(
   const elements: React.ReactNode[] = [];
   const depthMap = new Map<number, { x: number; y: number; addr: string }[]>();
 
+  // Compute max depth first for vertical centering
+  let maxDepth = 0;
+  nodes.forEach((node) => {
+    const d = parseInt((node.fields as Record<string, string>).depth ?? '0');
+    if (d > maxDepth) maxDepth = d;
+  });
+  const totalH = (maxDepth + 1) * DEPTH_GAP;
+  const startY = Math.max(40, (canvasSize.h - totalH) / 2);
+
   // Layout: root at top, each depth level below
   nodes.forEach((node) => {
     const depth = parseInt((node.fields as Record<string, string>).depth ?? '0');
@@ -31,7 +40,7 @@ export function renderRecursionTree(
     if (!depthMap.has(depth)) depthMap.set(depth, []);
     const row = depthMap.get(depth)!;
     const x = canvasSize.w / 2 - NODE_W / 2 - (nodes.length * (NODE_W + X_GAP)) / 2 + row.length * (NODE_W + X_GAP);
-    const y = 40 + depth * DEPTH_GAP;
+    const y = startY + depth * DEPTH_GAP;
 
     const isActive = status !== 'returned';
     elements.push(

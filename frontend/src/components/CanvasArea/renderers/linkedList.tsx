@@ -1,7 +1,7 @@
 import { Fragment } from 'react';
 import { Rect, Text, Arrow, Group, Line } from 'react-konva';
 import type { HeapStructure } from '../../../types';
-import { NODE_W, NODE_H, NODE_GAP, NODE_RADIUS, START_X, CENTER_Y, CONTENT_MARGIN } from '../constants';
+import { NODE_W, NODE_H, NODE_GAP, NODE_RADIUS, START_X, CONTENT_MARGIN } from '../constants';
 import { nodeDisplayValue } from '../utils';
 import { getLinkedListLayout } from '../layouts/linkedList';
 
@@ -25,17 +25,30 @@ export function renderLinkedList(
   const elements: React.ReactNode[] = [];
 
   // Arrows between nodes
+  const isDoubly = !!struct.prev_field;
   for (let i = 0; i < nodes.length - 1; i++) {
     const from = positions[nodes[i].addr];
     const to = positions[nodes[i + 1].addr];
+    // Forward arrow (top)
     elements.push(
       <Arrow
-        key={`arrow-${i}`}
-        points={[from.cx + NODE_W / 2 + 4, from.cy, to.cx - NODE_W / 2 - 4, to.cy]}
+        key={`arrow-fwd-${i}`}
+        points={[from.cx + NODE_W / 2 + 4, from.cy - 6, to.cx - NODE_W / 2 - 4, to.cy - 6]}
         pointerLength={8} pointerWidth={8}
         fill="#888" stroke="#888" strokeWidth={2}
       />
     );
+    // Backward arrow for doubly linked list (bottom, reversed direction)
+    if (isDoubly) {
+      elements.push(
+        <Arrow
+          key={`arrow-bwd-${i}`}
+          points={[to.cx - NODE_W / 2 - 4, to.cy + 6, from.cx + NODE_W / 2 + 4, from.cy + 6]}
+          pointerLength={8} pointerWidth={8}
+          fill="#bbb" stroke="#bbb" strokeWidth={2}
+        />
+      );
+    }
   }
 
   // Last node → nullptr
@@ -87,15 +100,18 @@ export function renderLinkedList(
   nodes.forEach((node) => {
     const ptrs = node.pointers_pointing_here;
     if (ptrs.length === 0) return;
-    const { cx } = positions[node.addr];
+    const pos = positions[node.addr];
+    if (!pos) return;
+    const { cx, y } = pos;
+    const nodeBottom = y + NODE_H;
 
     ptrs.forEach((ptr, pi) => {
-      const labelY = CENTER_Y + NODE_H / 2 + 14 + pi * 20;
+      const labelY = nodeBottom + 14 + pi * 20;
 
       elements.push(
         <Line
           key={`ptr-line-${node.addr}-${ptr}`}
-          points={[cx, CENTER_Y + NODE_H / 2, cx, labelY - 4]}
+          points={[cx, nodeBottom, cx, labelY - 4]}
           stroke="#e65100" strokeWidth={1} dash={[3, 3]}
         />
       );

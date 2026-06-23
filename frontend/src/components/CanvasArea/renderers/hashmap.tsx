@@ -35,7 +35,7 @@ export function renderHashmap(
     : [];
 
   const startX = Math.max(40, (canvasSize.w - allBuckets.length * (HMAP_BUCKET_W + 8)) / 2);
-  const startY = 60;
+  const startY = Math.max(30, (canvasSize.h - allBuckets.length * 60) / 2);
 
   // Layout buckets horizontally
   const bucketPositions: Map<string, { x: number; y: number; cx: number; cy: number }> = new Map();

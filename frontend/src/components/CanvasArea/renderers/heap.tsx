@@ -1,7 +1,7 @@
 import { Fragment } from 'react';
 import { Rect, Text, Arrow, Group, Circle, Line } from 'react-konva';
 import type { HeapStructure } from '../../../types';
-import { TREE_LEVEL_H, TREE_NODE_RADIUS, START_X } from '../constants';
+import { TREE_LEVEL_H, TREE_NODE_RADIUS } from '../constants';
 
 export function renderHeap(
   struct: HeapStructure,
@@ -34,7 +34,7 @@ export function renderHeap(
 
   // Position nodes
   const positions: { x: number; y: number }[] = [];
-  const startY = 30;
+  const startY = Math.max(30, (canvasSize.h - (maxDepth + 1) * TREE_LEVEL_H) / 2);
   const usableWidth = canvasSize.w - 60;
 
   for (let level = 0; level <= maxDepth; level++) {
