@@ -10,7 +10,8 @@
       "Bash(python main.py)",
       "Bash(git -C /Users/ljc/Documents/Code/Test/cpp-visualizer diff --stat)",
       "Bash(git -C /Users/ljc/Documents/Code/Test/cpp-visualizer add backend/annotations.py backend/lldb_walkers.py backend/memory_walker.py backend/snapshot.py frontend/src/components/VariablePanel.tsx frontend/src/templates/builtin.ts)",
-      "Bash(git -C /Users/ljc/Documents/Code/Test/cpp-visualizer commit -m 'feat: 修复栈节点计数\\(top+1\\) + 新增 @viz show\\(\\) 监视表达式注解 *)"
+      "Bash(git -C /Users/ljc/Documents/Code/Test/cpp-visualizer commit -m 'feat: 修复栈节点计数\\(top+1\\) + 新增 @viz show\\(\\) 监视表达式注解 *)",
+      "Bash(/Users/ljc/Documents/Code/Test/cpp-visualizer/frontend/node_modules/.bin/tsc --project /Users/ljc/Documents/Code/Test/cpp-visualizer/frontend/tsconfig.json --noEmit)"
     ]
   }
 }

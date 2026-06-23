@@ -26,7 +26,8 @@
       "Bash(/opt/anaconda3/bin/python3.11 /Users/ljc/Documents/Code/Test/cpp-visualizer/backend/main.py)",
       "Bash(curl -s http://localhost:8000/api/sessions)",
       "Bash(curl -s -X POST http://localhost:8000/api/sessions -H 'Content-Type: application/json' -d '{\"template_id\": \"stack_sequential\"}')",
-      "Bash(python3.11 -m json.tool)"
+      "Bash(python3.11 -m json.tool)",
+      "Bash(node_modules/.bin/tsc --noEmit)"
     ]
   }
 }
