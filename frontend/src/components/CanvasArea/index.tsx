@@ -412,6 +412,39 @@ export default function CanvasArea() {
     setIsDragging(false);
   }, []);
 
+  // ---- Wheel handler: Ctrl+Wheel = zoom (like Word), plain Wheel = scroll ----
+  const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    // Don't zoom while user is dragging to pan
+    if (dragState.current.active) return;
+
+    // Only zoom when Ctrl (Windows/Linux) or ⌘ (Mac) is held — like Word
+    if (!e.ctrlKey && !e.metaKey) return; // let browser scroll naturally
+
+    e.preventDefault();
+    const container = containerRef.current;
+    if (!container) return;
+
+    const zoomIn = e.deltaY < 0;
+    // Tiny factor per wheel tick — trackpads fire many events per flick
+    const factor = zoomIn ? 1.03 : 0.97;
+    const mouseX = e.clientX;
+    const mouseY = e.clientY;
+
+    setStageScale((prev) => {
+      const next = prev * factor;
+      return Math.min(5, Math.max(0.2, next));
+    });
+
+    // Cursor-position zoom: keep the content point under the cursor stationary
+    requestAnimationFrame(() => {
+      const rect = container.getBoundingClientRect();
+      const ox = mouseX - rect.left;
+      const oy = mouseY - rect.top;
+      container.scrollLeft = (container.scrollLeft + ox) * factor - ox;
+      container.scrollTop = (container.scrollTop + oy) * factor - oy;
+    });
+  }, []);
+
   // ---- Empty / terminal states ----
   if (isIdle || (visibleStructures.length === 0 && !isTerminated)) {
     return (
@@ -462,6 +495,7 @@ export default function CanvasArea() {
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
+      onWheel={handleWheel}
     >
       <Stage
         ref={stageRef}

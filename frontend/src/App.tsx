@@ -118,12 +118,12 @@ export default function App() {
         overflow: 'hidden',
         borderLeft: '1px solid #e8e8e8',
       }}>
-        {/* 可视化画布 — 上部：占据 splitY% 高度，变量面板折叠时自动撑满 */}
-        <div style={{ flex: `1 1 auto`, overflow: 'hidden', maxHeight: `${splitY}%`, minHeight: 80 }}>
+        {/* 可视化画布 — 始终填满面板上方全部空间，minHeight 保证至少 splitY% */}
+        <div style={{ flex: '1 1 auto', overflow: 'hidden', minHeight: `${splitY}%` }}>
           <CanvasArea />
         </div>
 
-        {/* 垂直分隔条 — 拖拽调整画布最大占比 */}
+        {/* 垂直分隔条 — 拖拽调整画布最小占比 */}
         <div
           style={{
             height: DIVIDER,
@@ -139,8 +139,8 @@ export default function App() {
           onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
         />
 
-        {/* 变量面板 — 下部：内容高度，折叠后自然贴底 */}
-        <div style={{ flex: '0 0 auto', overflow: 'hidden' }}>
+        {/* 变量面板 — 折叠后紧跟分隔条；内容过多时可滚动 */}
+        <div style={{ flex: '0 1 auto', overflow: 'hidden auto', minHeight: 0 }}>
           <VariablePanel />
         </div>
       </div>
