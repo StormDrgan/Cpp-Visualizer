@@ -53,7 +53,7 @@ export default function AnnotationPanel() {
         fields[field.key] = detectedVars[0];
       } else if (field.key === 'name' && detectedVars.length > 0) {
         fields[field.key] = detectedVars[0];
-      } else if (field.key === 'watched_vars') {
+      } else if (field.key === 'show_vars') {
         fields[field.key] = detectedVars.join(', ');
       } else {
         fields[field.key] = field.placeholder;
@@ -80,7 +80,7 @@ export default function AnnotationPanel() {
       case 'graph': return `${ann.name} ← ${ann.root_var} (${ann.mode})`;
       case 'hashmap': return `${ann.name} ← ${ann.root_var} (${ann.mode})`;
       case 'recursion_tree': return ann.name;
-      case 'watch': return `watch: ${ann.watched_vars.join(', ')}`;
+      case 'show': return `show: ${ann.show_vars.join(', ')}`;
       default: return '';
     }
   };

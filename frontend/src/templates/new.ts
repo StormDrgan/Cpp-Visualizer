@@ -132,7 +132,7 @@ int main() {
 using namespace std;
 
 // @viz linked_list(DL) head=head.next_field=next.prev_field=prev
-// @viz watch(curr)
+// @viz show(curr)
 struct DListNode {
     int val;
     DListNode* prev;
@@ -184,7 +184,7 @@ struct EdgeNode {
 };
 
 // @viz graph(G) var=adj.size_var=n
-// @viz watch(curr)
+// @viz show(curr)
 int main() {
     int n = 5;
     EdgeNode* adj[5] = {nullptr};
@@ -229,7 +229,7 @@ struct EdgeNode {
 };
 
 // @viz graph(G) var=adj.size_var=n
-// @viz watch(curr)
+// @viz show(curr)
 int main() {
     int n = 5;
     EdgeNode* adj[5] = {nullptr};
@@ -300,7 +300,7 @@ struct AVLNode {
 };
 
 // @viz binary_tree(T) root=root.left_field=left.right_field=right
-// @viz watch(curr)
+// @viz show(curr)
 AVLNode* insert(AVLNode* node, int val) {
     if (!node) return new AVLNode(val);
     if (val < node->val)

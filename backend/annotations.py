@@ -2,7 +2,7 @@
 
 Supports:
   // @viz linked_list(name) head=root_var.next_field=field_name
-  // @viz watch(ptr1, ptr2, ...)
+  // @viz show(ptr1, ptr2, ...)
 
 See DESIGN.md §4.4 and §8.5 for the annotation syntax.
 """
@@ -15,8 +15,8 @@ from dataclasses import dataclass, field
 class Annotation:
     """A single parsed @viz annotation."""
     struct_type: str           # "linked_list", "binary_tree", "array", "stack",
-                               # "queue", "heap", "graph", "hashmap", "watch",
-                               # "recursion_tree", "show"
+                               # "queue", "heap", "graph", "hashmap",
+                               # "recursion_tree"
     name: str                  # user-given name for this structure
     root_var: str = ""         # root pointer variable
     next_field: str = ""       # field name for the "next" pointer
@@ -27,8 +27,7 @@ class Annotation:
     front_var: str = ""        # for queue — index variable tracking the front
     rear_var: str = ""         # for queue — index variable tracking the rear
     mode: str = ""             # for hashmap: "chaining" (default) or "open_addressing"
-    watched_vars: list[str] = field(default_factory=list)  # for "watch"
-    show_vars: list[str] = field(default_factory=list)     # for "show"
+    show_vars: list[str] = field(default_factory=list)     # for "show" — variables to mark on canvas
     prev_field: str = ""       # for doubly linked list (v0.9)
     tree_variant: str = ""     # "avl" | "threaded" | "" (v0.9)
 
@@ -108,10 +107,6 @@ _HASHMAP_RE = re.compile(
     r'@viz\s+hashmap\((\w+)\)'
     r'\s+var=(\w+(?:->\w+)*)'
     r'(?:\.mode=(\w+))?'
-)
-
-_WATCH_RE = re.compile(
-    r'@viz\s+watch\(([^)]+)\)'
 )
 
 _SHOW_RE = re.compile(
@@ -332,25 +327,13 @@ def parse_annotations(source_code: str) -> list[Annotation]:
             ))
             continue
 
-        # Try watch
-        m = _WATCH_RE.search(stripped)
-        if m:
-            vars_str = m.group(1)
-            watched = [v.strip() for v in vars_str.split(',') if v.strip()]
-            annotations.append(Annotation(
-                struct_type="watch",
-                name="",
-                watched_vars=watched,
-            ))
-            continue
-
     return annotations
 
 
-def get_watched_vars(annotations: list[Annotation]) -> list[str]:
-    """Collect all watched pointer variables from watch annotations."""
-    watched = []
+def get_show_vars(annotations: list[Annotation]) -> list[str]:
+    """Collect all show variable names from show annotations."""
+    result = []
     for ann in annotations:
-        if ann.struct_type == "watch":
-            watched.extend(ann.watched_vars)
-    return watched
+        if ann.struct_type == "show":
+            result.extend(ann.show_vars)
+    return result

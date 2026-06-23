@@ -53,11 +53,9 @@ export default function VariablePanel() {
   const callStack = snapshot?.call_stack ?? [];
   const stdout = snapshot?.stdout ?? '';
   const candidates: CandidateVar[] = snapshot?.candidates ?? [];
-  const watchedExprs = snapshot?.watched_expressions ?? [];
 
   // Collapse states — locals + output + targets open by default; call stack folded
   const [showLocals, setShowLocals] = useState(true);
-  const [showWatched, setShowWatched] = useState(true);
   const [showCallStack, setShowCallStack] = useState(false);
   const [showOutput, setShowOutput] = useState(true);
   const [showTargets, setShowTargets] = useState(true);
@@ -164,59 +162,6 @@ export default function VariablePanel() {
         </div>
         )}
       </div>
-
-      {/* 监视表达式 — @viz show() */}
-      {watchedExprs.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', flexShrink: 0 }}>
-          <div
-            style={{
-              height: 32, background: '#fafafa',
-              borderTop: '2px solid #e8e8e8',
-              borderBottom: showWatched ? '1px solid #e8e8e8' : 'none',
-              display: 'flex', alignItems: 'center', padding: '0 12px', flexShrink: 0,
-              cursor: 'pointer',
-            }}
-            onClick={() => setShowWatched(!showWatched)}
-          >
-            <span style={{ fontSize: 12, fontWeight: 600, color: '#555' }}>👁 监视表达式</span>
-            <span
-              style={{
-                fontSize: 10, color: '#999', background: '#e3f2fd',
-                borderRadius: 8, padding: '1px 6px', marginLeft: 6,
-              }}
-            >
-              {watchedExprs.length}
-            </span>
-            <span style={{ marginLeft: 'auto', fontSize: 10, color: '#ccc', transform: showWatched ? 'rotate(180deg)' : undefined, transition: 'transform 0.2s' }}>
-              ▼
-            </span>
-          </div>
-
-          {showWatched && (
-            <div style={{ maxHeight: 120, overflowY: 'auto' }}>
-              {watchedExprs.map((w, i) => (
-                <div
-                  key={i}
-                  style={{
-                    display: 'flex', alignItems: 'center',
-                    padding: '5px 12px', fontSize: 12,
-                    fontFamily: 'SF Mono, Menlo, Monaco, monospace',
-                    borderBottom: '1px solid #f5f5f5',
-                  }}
-                >
-                  <span style={{ color: '#1a73e8', fontWeight: 500, marginRight: 8 }}>
-                    {w.expression}
-                  </span>
-                  <span style={{ color: '#999', marginRight: 4 }}>=</span>
-                  <span style={{ color: '#2e7d32', fontWeight: 500 }}>
-                    {w.value}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
 
       {/* 程序输出 */}
       <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', flexShrink: showOutput ? 0 : undefined }}>

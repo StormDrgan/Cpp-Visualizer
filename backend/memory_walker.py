@@ -67,23 +67,12 @@ class MemoryWalker:
     def __init__(self, send_cmd: Callable[[dict], dict]):
         self._send = send_cmd
 
-    def evaluate_expr(self, expr: str) -> str:
-        """Evaluate a C++ expression via the LLDB bridge and return its value.
-
-        Used by @viz show() to read the current value of watched expressions
-        at each debug step.
-        """
-        resp = self._send({"cmd": "evaluate", "expression": expr})
-        if resp.get("ok"):
-            return str(resp.get("result", {}).get("value", ""))
-        return f"<{resp.get('error', '?')}>"
-
     def walk_linked_list(
         self,
         annotation_name: str,
         root_var: str,
         next_field: str,
-        watched_vars: list[str] | None = None,
+        show_vars: list[str] | None = None,
     ) -> TraversalResult:
         """Walk a linked list from root_var following next_field.
 
@@ -91,13 +80,13 @@ class MemoryWalker:
             annotation_name: User-given name (e.g., "list1").
             root_var: C++ variable name of the head pointer.
             next_field: Name of the struct field that points to the next node.
-            watched_vars: Optional list of pointer variable names to match.
+            show_vars: Optional list of pointer variable names to match.
 
         Returns:
             TraversalResult with all nodes and pointer assignments.
         """
-        if watched_vars is None:
-            watched_vars = []
+        if show_vars is None:
+            show_vars = []
 
         # Walk via the bridge — bridge evaluates root_var to get both value and type
         resp = self._send({
@@ -127,9 +116,9 @@ class MemoryWalker:
                 fields=n.get("fields", {}),
             ))
 
-        # Step 4: match watched pointers to nodes
-        if watched_vars and nodes:
-            self._match_pointers(nodes, watched_vars)
+        # Step 4: match show variables to nodes
+        if show_vars and nodes:
+            self._match_pointers(nodes, show_vars)
 
         return TraversalResult(
             annotation_name=annotation_name,
@@ -145,14 +134,14 @@ class MemoryWalker:
         root_var: str,
         left_field: str = "left",
         right_field: str = "right",
-        watched_vars: list[str] | None = None,
+        show_vars: list[str] | None = None,
     ) -> TraversalResult:
         """Walk a binary tree from root_var following left_field and right_field.
 
         Uses BFS (level-order) to collect all nodes and parent-child edges.
         """
-        if watched_vars is None:
-            watched_vars = []
+        if show_vars is None:
+            show_vars = []
 
         resp = self._send({
             "cmd": "walk_binary_tree",
@@ -201,9 +190,9 @@ class MemoryWalker:
                 elif parent.fields.get(right_field) == child_addr:
                     edge.child_side = "right"
 
-        # Match watched pointers to nodes
-        if watched_vars and nodes:
-            self._match_pointers(nodes, watched_vars)
+        # Match show variables to nodes
+        if show_vars and nodes:
+            self._match_pointers(nodes, show_vars)
 
         return TraversalResult(
             annotation_name=annotation_name,
@@ -218,7 +207,7 @@ class MemoryWalker:
         annotation_name: str,
         root_var: str,
         length_var: str = "",
-        watched_vars: list[str] | None = None,
+        show_vars: list[str] | None = None,
     ) -> TraversalResult:
         """Walk a C++ array from root_var, reading length_var elements.
 
@@ -226,13 +215,13 @@ class MemoryWalker:
             annotation_name: User-given name (e.g., "A").
             root_var: C++ variable name of the array.
             length_var: Variable name or literal integer for the element count.
-            watched_vars: Optional list of pointer variable names to match.
+            show_vars: Optional list of pointer variable names to match.
 
         Returns:
             TraversalResult with nodes for each array element.
         """
-        if watched_vars is None:
-            watched_vars = []
+        if show_vars is None:
+            show_vars = []
 
         resp = self._send({
             "cmd": "walk_array",
@@ -259,9 +248,9 @@ class MemoryWalker:
                 fields=n.get("fields", {}),
             ))
 
-        # Match watched pointers to array element addresses
-        if watched_vars and nodes:
-            self._match_pointers(nodes, watched_vars)
+        # Match show variables to array element addresses
+        if show_vars and nodes:
+            self._match_pointers(nodes, show_vars)
 
         return TraversalResult(
             annotation_name=annotation_name,
@@ -276,7 +265,7 @@ class MemoryWalker:
         root_var: str,
         mode: str = "adjlist",
         size_var: str = "",
-        watched_vars: list[str] | None = None,
+        show_vars: list[str] | None = None,
     ) -> TraversalResult:
         """Walk a graph structure (adjacency matrix or adjacency list).
 
@@ -285,10 +274,10 @@ class MemoryWalker:
             root_var: C++ variable name of the graph data structure.
             mode: "matrix" for adjacency matrix, "adjlist" for adjacency list.
             size_var: Variable name for vertex count.
-            watched_vars: Optional list of pointer variable names to match.
+            show_vars: Optional list of pointer variable names to match.
         """
-        if watched_vars is None:
-            watched_vars = []
+        if show_vars is None:
+            show_vars = []
 
         resp = self._send({
             "cmd": "walk_graph",
@@ -321,8 +310,8 @@ class MemoryWalker:
             child_side="",
         ) for e in raw_edges]
 
-        if watched_vars and nodes:
-            self._match_pointers(nodes, watched_vars)
+        if show_vars and nodes:
+            self._match_pointers(nodes, show_vars)
 
         return TraversalResult(
             annotation_name=annotation_name,
@@ -337,7 +326,7 @@ class MemoryWalker:
         annotation_name: str,
         root_var: str,
         mode: str = "chaining",
-        watched_vars: list[str] | None = None,
+        show_vars: list[str] | None = None,
     ) -> TraversalResult:
         """Walk a hash table structure.
 
@@ -345,10 +334,10 @@ class MemoryWalker:
             annotation_name: User-given name (e.g., "H").
             root_var: C++ variable name of the hash table.
             mode: "chaining" for separate chaining, "open_addressing" for open addressing.
-            watched_vars: Optional list of pointer variable names to match.
+            show_vars: Optional list of pointer variable names to match.
         """
-        if watched_vars is None:
-            watched_vars = []
+        if show_vars is None:
+            show_vars = []
 
         resp = self._send({
             "cmd": "walk_hashmap",
@@ -380,8 +369,8 @@ class MemoryWalker:
             child_side="",
         ) for e in raw_edges]
 
-        if watched_vars and nodes:
-            self._match_pointers(nodes, watched_vars)
+        if show_vars and nodes:
+            self._match_pointers(nodes, show_vars)
 
         return TraversalResult(
             annotation_name=annotation_name,
@@ -397,7 +386,7 @@ class MemoryWalker:
         root_var: str,
         order: int = 3,
         is_bplus: bool = False,
-        watched_vars: list[str] | None = None,
+        show_vars: list[str] | None = None,
     ) -> TraversalResult:
         """Walk a B-tree or B+tree from root_var.
 
@@ -406,10 +395,10 @@ class MemoryWalker:
             root_var: C++ variable name of the root pointer.
             order: B-tree order m (max children per node).
             is_bplus: If True, treat as B+tree (leaves have sibling links).
-            watched_vars: Optional list of pointer variable names to match.
+            show_vars: Optional list of pointer variable names to match.
         """
-        if watched_vars is None:
-            watched_vars = []
+        if show_vars is None:
+            show_vars = []
 
         resp = self._send({
             "cmd": "walk_b_tree",
@@ -442,8 +431,8 @@ class MemoryWalker:
             child_side=e.get("child_side", ""),
         ) for e in raw_edges]
 
-        if watched_vars and nodes:
-            self._match_pointers(nodes, watched_vars)
+        if show_vars and nodes:
+            self._match_pointers(nodes, show_vars)
 
         return TraversalResult(
             annotation_name=annotation_name,
@@ -453,7 +442,7 @@ class MemoryWalker:
             edges=edges,
         )
 
-    def _match_pointers(self, nodes: list[HeapNode], watched_vars: list[str]) -> None:
+    def _match_pointers(self, nodes: list[HeapNode], show_vars: list[str]) -> None:
         """For each watched variable, find which node it points to.
 
         Two-phase matching:
@@ -463,7 +452,7 @@ class MemoryWalker:
            try matching the evaluated value against node.fields["index"]
            (works for integer loop counters like i, j, lo, hi, mid).
         """
-        for var in watched_vars:
+        for var in show_vars:
             resp = self._send({"cmd": "evaluate", "expression": var})
             if not resp.get("ok"):
                 continue
@@ -662,9 +651,9 @@ class MemoryWalker:
                     length_var=m.group(2),
                 ))
 
-        # Auto-watch: collect pointer variables of discovered types that
+        # Auto-show: collect pointer variables of discovered types that
         # weren't promoted to roots (e.g. when inspect_type failed for them).
-        watched: list[str] = []
+        show_list: list[str] = []
         for var in variables:
             vname = getattr(var, 'name', '')
             if vname in root_names:
@@ -672,11 +661,11 @@ class MemoryWalker:
             if getattr(var, 'is_pointer', False) and getattr(var, 'deref_type', ''):
                 dt = getattr(var, 'deref_type', '')
                 if dt in discovered_types:
-                    watched.append(vname)
+                    show_list.append(vname)
 
-        if watched:
+        if show_list:
             annotations.append(Annotation(
-                struct_type="watch", name="", watched_vars=watched,
+                struct_type="show", name="", show_vars=show_list,
             ))
 
         return annotations

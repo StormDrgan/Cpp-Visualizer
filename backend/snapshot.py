@@ -5,7 +5,7 @@ See DESIGN.md §3.4 for the full StateSnapshot schema.
 
 from __future__ import annotations
 from memory_walker import MemoryWalker, TraversalResult, TreeEdge
-from annotations import Annotation, get_watched_vars
+from annotations import Annotation, get_show_vars
 
 
 def build_snapshot(
@@ -59,17 +59,6 @@ def build_snapshot(
     # so the front-end can render a checkbox list (§v0.8 click-to-select).
     candidates = _build_candidates(heap_structures)
 
-    # Watched expressions: evaluate @viz show() variables at current step.
-    # Each entry is {expression, value} — the frontend renders them in the
-    # "监视表达式" panel.
-    watched_expressions: list[dict] = []
-    if annotations and walker:
-        for ann in annotations:
-            if ann.struct_type == "show":
-                for expr in ann.show_vars:
-                    val = walker.evaluate_expr(expr)
-                    watched_expressions.append({"expression": expr, "value": val})
-
     # v0.9: generate operation summary from current state
     operation_summary = debugger_state.current_function or ""
     if debugger_state.source_line:
@@ -82,7 +71,6 @@ def build_snapshot(
         "current_function": debugger_state.current_function,
         "call_stack": call_stack_list,
         "locals": locals_list,
-        "watched_expressions": watched_expressions,
         "heap_structures": heap_structures,
         "candidates": candidates,
         "stdout": getattr(debugger_state, "stdout", ""),
@@ -133,13 +121,13 @@ def _build_heap_structures(
         if selected_vars is not None:
             sv_set = set(selected_vars)
             discovered = [a for a in discovered
-                          if a.struct_type == "watch"  # always keep watch
+                          if a.struct_type == "show"  # always keep show
                           or a.root_var in sv_set]
         all_annotations.extend(discovered)
         if discovered:
-            pass  # auto_discover already handles auto-watch
+            pass  # auto_discover already handles auto-show
 
-    watched = get_watched_vars(all_annotations)
+    show_vars_list = get_show_vars(all_annotations)
     structures = []
 
     for ann in all_annotations:
@@ -148,7 +136,7 @@ def _build_heap_structures(
                 annotation_name=ann.name,
                 root_var=ann.root_var,
                 next_field=ann.next_field,
-                watched_vars=watched,
+                show_vars=show_vars_list,
             )
             sdict = _traversal_to_dict(result)
             # v0.9: thread prev_field from annotation
@@ -161,7 +149,7 @@ def _build_heap_structures(
                 root_var=ann.root_var,
                 left_field=ann.left_field or "left",
                 right_field=ann.right_field or "right",
-                watched_vars=watched,
+                show_vars=show_vars_list,
             )
             sdict = _traversal_to_dict(result)
             # v0.9: thread tree_variant from annotation
@@ -173,7 +161,7 @@ def _build_heap_structures(
                 annotation_name=ann.name,
                 root_var=ann.root_var,
                 length_var=ann.length_var,
-                watched_vars=watched,
+                show_vars=show_vars_list,
             )
             structures.append(_traversal_to_dict(result))
         elif ann.struct_type == "stack":
@@ -184,7 +172,7 @@ def _build_heap_structures(
                     annotation_name=ann.name,
                     root_var=ann.root_var,
                     next_field=ann.next_field,
-                    watched_vars=watched,
+                    show_vars=show_vars_list,
                 )
             else:
                 # Sequential stack (array-based)
@@ -194,7 +182,7 @@ def _build_heap_structures(
                     # top is a 0-based index — add 1 to get element count.
                     # LLDB evaluates e.g. (top)+1 → 5 when top=4 (5 elements).
                     length_var=f"({ann.top_var}) + 1",
-                    watched_vars=watched,
+                    show_vars=show_vars_list,
                 )
             structures.append(_traversal_to_dict(result))
         elif ann.struct_type == "queue":
@@ -205,7 +193,7 @@ def _build_heap_structures(
                     annotation_name=ann.name,
                     root_var=ann.root_var,
                     next_field=ann.next_field,
-                    watched_vars=watched,
+                    show_vars=show_vars_list,
                 )
             else:
                 # Circular queue (array-based) — walk full capacity
@@ -213,7 +201,7 @@ def _build_heap_structures(
                     annotation_name=ann.name,
                     root_var=ann.root_var,
                     length_var=ann.length_var or ann.rear_var,
-                    watched_vars=watched,
+                    show_vars=show_vars_list,
                 )
             structures.append(_traversal_to_dict(result))
         elif ann.struct_type == "heap":
@@ -222,7 +210,7 @@ def _build_heap_structures(
                 annotation_name=ann.name,
                 root_var=ann.root_var,
                 length_var=ann.length_var,
-                watched_vars=watched,
+                show_vars=show_vars_list,
             )
             structures.append(_traversal_to_dict(result))
         elif ann.struct_type == "graph":
@@ -231,18 +219,18 @@ def _build_heap_structures(
                 root_var=ann.root_var,
                 mode=ann.mode or "adjlist",
                 size_var=ann.length_var,
-                watched_vars=watched,
+                show_vars=show_vars_list,
             )
             sdict = _traversal_to_dict(result)
             # v0.9: compute traversal coloring from watched pointer positions
-            _compute_graph_traversal_colors(sdict, result, watched)
+            _compute_graph_traversal_colors(sdict, result, show_vars_list)
             structures.append(sdict)
         elif ann.struct_type == "hashmap":
             result = walker.walk_hashmap(
                 annotation_name=ann.name,
                 root_var=ann.root_var,
                 mode=ann.mode or "chaining",
-                watched_vars=watched,
+                show_vars=show_vars_list,
             )
             structures.append(_traversal_to_dict(result))
         elif ann.struct_type == "b_tree":
@@ -252,7 +240,7 @@ def _build_heap_structures(
                 root_var=ann.root_var,
                 order=order,
                 is_bplus=False,
-                watched_vars=watched,
+                show_vars=show_vars_list,
             )
             sdict = _traversal_to_dict(result)
             sdict["order"] = order
@@ -264,7 +252,7 @@ def _build_heap_structures(
                 root_var=ann.root_var,
                 order=order,
                 is_bplus=True,
-                watched_vars=watched,
+                show_vars=show_vars_list,
             )
             sdict = _traversal_to_dict(result)
             sdict["order"] = order
@@ -484,16 +472,16 @@ def _traversal_to_dict(result: TraversalResult) -> dict:
 def _compute_graph_traversal_colors(
     sdict: dict,
     result,
-    watched_vars: list[str],
+    show_vars: list[str],
 ) -> None:
     """Compute progressive coloring for graph traversal visualization.
 
-    Analyzes watched pointer positions to determine which nodes have been
+    Analyzes show variable positions to determine which nodes have been
     "visited" and assigns gradient colors based on visit order/layer.
     BFS: light-blue → deep-blue gradient by layer.
     DFS: light-purple → deep-purple gradient by depth.
     """
-    if not watched_vars or not result.nodes:
+    if not show_vars or not result.nodes:
         return
 
     nodes = result.nodes

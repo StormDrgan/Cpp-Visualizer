@@ -57,7 +57,7 @@ int main() {
 using namespace std;
 
 // @viz linked_list(L) head=head.next_field=next
-// @viz watch(slow, fast)
+// @viz show(slow, fast)
 struct ListNode {
     int val;
     ListNode* next;
@@ -103,7 +103,7 @@ int main() {
 using namespace std;
 
 // @viz binary_tree(T) root=root.left_field=left.right_field=right
-// @viz watch(curr)
+// @viz show(curr)
 struct TreeNode {
     int val;
     TreeNode* left;
@@ -153,7 +153,7 @@ int main() {
 using namespace std;
 
 // @viz array(A) var=arr.length_var=n
-// @viz watch(i, j)
+// @viz show(i, j)
 int main() {
     int arr[] = {5, 2, 8, 1, 9, 3, 7, 6};
     int n = 8;
@@ -183,7 +183,7 @@ int main() {
 using namespace std;
 
 // @viz array(A) var=arr.length_var=n
-// @viz watch(lo, hi, mid)
+// @viz show(lo, hi, mid)
 int main() {
     int arr[] = {1, 3, 5, 7, 9, 11, 13, 15};
     int n = 8;
@@ -215,7 +215,7 @@ int main() {
 using namespace std;
 
 // @viz binary_tree(T) root=root.left_field=left.right_field=right
-// @viz watch(root, curr)
+// @viz show(root, curr)
 struct TreeNode {
     int val;
     TreeNode* left;
@@ -257,7 +257,7 @@ int main() {
 using namespace std;
 
 // @viz linked_list(L) head=head.next_field=next
-// @viz watch(slow, fast)
+// @viz show(slow, fast)
 struct ListNode {
     int val;
     ListNode* next;
@@ -319,7 +319,7 @@ int main() {
 using namespace std;
 
 // @viz array(A) var=arr.length_var=n
-// @viz watch(i, j, minIdx)
+// @viz show(i, j, minIdx)
 int main() {
     int arr[] = {5, 2, 8, 1, 9, 3, 7, 6};
     int n = 8;
@@ -351,7 +351,6 @@ int main() {
 using namespace std;
 
 // @viz stack(S) var=arr.top_var=top
-// @viz watch(top)
 // @viz show(top)
 int main() {
     int arr[10];
@@ -386,7 +385,7 @@ int main() {
 using namespace std;
 
 // @viz queue(Q) var=front.next_field=next
-// @viz watch(front, rear)
+// @viz show(front, rear)
 struct QNode {
     int val;
     QNode* next;
@@ -442,7 +441,7 @@ struct HuffmanNode {
 };
 
 // @viz binary_tree(T) root=root.left_field=left.right_field=right
-// @viz watch(curr, min1, min2)
+// @viz show(curr, min1, min2)
 int main() {
     // 创建叶子节点（初始森林）
     HuffmanNode* nodes[] = {
@@ -497,7 +496,7 @@ int main() {
 using namespace std;
 
 // @viz array(D) var=deque.length_var=N
-// @viz watch(front, rear)
+// @viz show(front, rear)
 int main() {
     const int N = 8;
     int deque[N] = {};
@@ -563,7 +562,7 @@ int main() {
 using namespace std;
 
 // @viz heap(H) var=arr.length_var=size
-// @viz watch(i, j)
+// @viz show(i, j)
 int main() {
     // 大顶堆（数组存储）
     // 索引 0 为根，左子 = 2i+1, 右子 = 2i+2
@@ -756,7 +755,7 @@ struct HashNode {
 };
 
 // @viz hashmap(H) var=table.mode=chaining
-// @viz watch(cur)
+// @viz show(cur)
 int main() {
     const int M = 7;
     HashNode* table[M] = {nullptr};

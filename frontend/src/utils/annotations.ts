@@ -24,7 +24,7 @@ export interface VizAnnotation {
   front_var: string;
   rear_var: string;
   mode: string;
-  watched_vars: string[];
+  show_vars: string[];
 }
 
 /** Structure type definitions for the form */
@@ -210,14 +210,14 @@ export const STRUCT_TYPES: StructTypeDef[] = [
       `// @viz bplustree(${name}) root=${f.root_var}.order=${f.name}`,
   },
   {
-    type: 'watch',
-    label: '监视指针',
+    type: 'show',
+    label: '监视变量',
     icon: '👁️',
     fields: [
-      { key: 'watched_vars', label: '监视变量 (逗号分隔)', placeholder: 'slow, fast' },
+      { key: 'show_vars', label: '监视变量 (逗号分隔)', placeholder: 'slow, fast' },
     ],
     format: (name, f) =>
-      `// @viz watch(${f.watched_vars})`,
+      `// @viz show(${f.show_vars})`,
   },
 ];
 
@@ -257,7 +257,7 @@ function parseSingleAnnotation(text: string): Omit<VizAnnotation, 'line' | 'raw'
       struct_type: 'linked_list', name: m[1], root_var: m[2],
       next_field: m[3], prev_field: m[4],
       left_field: '', right_field: '', length_var: '',
-      top_var: '', front_var: '', rear_var: '', mode: '', watched_vars: [],
+      top_var: '', front_var: '', rear_var: '', mode: '', show_vars: [],
     };
   }
 
@@ -268,7 +268,7 @@ function parseSingleAnnotation(text: string): Omit<VizAnnotation, 'line' | 'raw'
       struct_type: 'linked_list', name: m[1], root_var: m[2],
       next_field: m[3], prev_field: '',
       left_field: '', right_field: '', length_var: '',
-      top_var: '', front_var: '', rear_var: '', mode: '', watched_vars: [],
+      top_var: '', front_var: '', rear_var: '', mode: '', show_vars: [],
     };
   }
 
@@ -279,7 +279,7 @@ function parseSingleAnnotation(text: string): Omit<VizAnnotation, 'line' | 'raw'
       struct_type: 'binary_tree', name: m[1], root_var: m[2],
       left_field: m[3], right_field: m[4],
       next_field: '', prev_field: '', length_var: '',
-      top_var: '', front_var: '', rear_var: '', mode: '', watched_vars: [],
+      top_var: '', front_var: '', rear_var: '', mode: '', show_vars: [],
     };
   }
 
@@ -289,7 +289,7 @@ function parseSingleAnnotation(text: string): Omit<VizAnnotation, 'line' | 'raw'
     return {
       struct_type: 'array', name: m[1], root_var: m[2], length_var: m[3],
       next_field: '', prev_field: '', left_field: '', right_field: '',
-      top_var: '', front_var: '', rear_var: '', mode: '', watched_vars: [],
+      top_var: '', front_var: '', rear_var: '', mode: '', show_vars: [],
     };
   }
 
@@ -299,7 +299,7 @@ function parseSingleAnnotation(text: string): Omit<VizAnnotation, 'line' | 'raw'
     return {
       struct_type: 'stack', name: m[1], root_var: m[2], top_var: m[3],
       next_field: '', prev_field: '', left_field: '', right_field: '',
-      length_var: '', front_var: '', rear_var: '', mode: '', watched_vars: [],
+      length_var: '', front_var: '', rear_var: '', mode: '', show_vars: [],
     };
   }
 
@@ -309,7 +309,7 @@ function parseSingleAnnotation(text: string): Omit<VizAnnotation, 'line' | 'raw'
     return {
       struct_type: 'stack', name: m[1], root_var: m[2], next_field: m[3],
       prev_field: '', left_field: '', right_field: '',
-      length_var: '', top_var: '', front_var: '', rear_var: '', mode: '', watched_vars: [],
+      length_var: '', top_var: '', front_var: '', rear_var: '', mode: '', show_vars: [],
     };
   }
 
@@ -320,7 +320,7 @@ function parseSingleAnnotation(text: string): Omit<VizAnnotation, 'line' | 'raw'
       struct_type: 'queue', name: m[1], root_var: m[2],
       front_var: m[3], rear_var: m[4],
       next_field: '', prev_field: '', left_field: '', right_field: '',
-      length_var: '', top_var: '', mode: '', watched_vars: [],
+      length_var: '', top_var: '', mode: '', show_vars: [],
     };
   }
 
@@ -330,7 +330,7 @@ function parseSingleAnnotation(text: string): Omit<VizAnnotation, 'line' | 'raw'
     return {
       struct_type: 'queue', name: m[1], root_var: m[2], next_field: m[3],
       prev_field: '', left_field: '', right_field: '',
-      length_var: '', top_var: '', front_var: '', rear_var: '', mode: '', watched_vars: [],
+      length_var: '', top_var: '', front_var: '', rear_var: '', mode: '', show_vars: [],
     };
   }
 
@@ -340,7 +340,7 @@ function parseSingleAnnotation(text: string): Omit<VizAnnotation, 'line' | 'raw'
     return {
       struct_type: 'heap', name: m[1], root_var: m[2], length_var: m[3] || '',
       next_field: '', prev_field: '', left_field: '', right_field: '',
-      top_var: '', front_var: '', rear_var: '', mode: '', watched_vars: [],
+      top_var: '', front_var: '', rear_var: '', mode: '', show_vars: [],
     };
   }
 
@@ -351,7 +351,7 @@ function parseSingleAnnotation(text: string): Omit<VizAnnotation, 'line' | 'raw'
       struct_type: 'graph', name: m[1], root_var: m[2], mode: 'matrix',
       length_var: m[3] || '',
       next_field: '', prev_field: '', left_field: '', right_field: '',
-      top_var: '', front_var: '', rear_var: '', watched_vars: [],
+      top_var: '', front_var: '', rear_var: '', show_vars: [],
     };
   }
 
@@ -362,7 +362,7 @@ function parseSingleAnnotation(text: string): Omit<VizAnnotation, 'line' | 'raw'
       struct_type: 'graph', name: m[1], root_var: m[2], mode: 'adjlist',
       length_var: m[3] || '',
       next_field: '', prev_field: '', left_field: '', right_field: '',
-      top_var: '', front_var: '', rear_var: '', watched_vars: [],
+      top_var: '', front_var: '', rear_var: '', show_vars: [],
     };
   }
 
@@ -372,7 +372,7 @@ function parseSingleAnnotation(text: string): Omit<VizAnnotation, 'line' | 'raw'
     return {
       struct_type: 'hashmap', name: m[1], root_var: m[2], mode: m[3] || 'chaining',
       next_field: '', prev_field: '', left_field: '', right_field: '',
-      length_var: '', top_var: '', front_var: '', rear_var: '', watched_vars: [],
+      length_var: '', top_var: '', front_var: '', rear_var: '', show_vars: [],
     };
   }
 
@@ -382,7 +382,7 @@ function parseSingleAnnotation(text: string): Omit<VizAnnotation, 'line' | 'raw'
     return {
       struct_type: 'recursion_tree', name: m[1], root_var: '',
       next_field: '', prev_field: '', left_field: '', right_field: '',
-      length_var: '', top_var: '', front_var: '', rear_var: '', mode: '', watched_vars: [],
+      length_var: '', top_var: '', front_var: '', rear_var: '', mode: '', show_vars: [],
     };
   }
 
@@ -393,7 +393,7 @@ function parseSingleAnnotation(text: string): Omit<VizAnnotation, 'line' | 'raw'
       struct_type: 'b_tree', name: m[1], root_var: m[2],
       length_var: m[3] || '3',
       next_field: '', prev_field: '', left_field: '', right_field: '',
-      top_var: '', front_var: '', rear_var: '', mode: '', watched_vars: [],
+      top_var: '', front_var: '', rear_var: '', mode: '', show_vars: [],
     };
   }
 
@@ -404,16 +404,16 @@ function parseSingleAnnotation(text: string): Omit<VizAnnotation, 'line' | 'raw'
       struct_type: 'bplustree', name: m[1], root_var: m[2],
       length_var: m[3] || '4',
       next_field: '', prev_field: '', left_field: '', right_field: '',
-      top_var: '', front_var: '', rear_var: '', mode: '', watched_vars: [],
+      top_var: '', front_var: '', rear_var: '', mode: '', show_vars: [],
     };
   }
 
-  // watch
-  m = s.match(/@viz\s+watch\(([^)]+)\)/);
+  // show
+  m = s.match(/@viz\s+show\(([^)]+)\)/);
   if (m) {
     return {
-      struct_type: 'watch', name: '',
-      watched_vars: m[1].split(',').map((v) => v.trim()).filter(Boolean),
+      struct_type: 'show', name: '',
+      show_vars: m[1].split(',').map((v) => v.trim()).filter(Boolean),
       root_var: '', next_field: '', prev_field: '',
       left_field: '', right_field: '', length_var: '',
       top_var: '', front_var: '', rear_var: '', mode: '',

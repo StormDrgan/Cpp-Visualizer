@@ -49,7 +49,6 @@ export interface StateSnapshot {
   current_function: string;
   call_stack: StackFrame[];
   locals: Variable[];
-  watched_expressions: { expression: string; value: string }[];
   heap_structures: HeapStructure[];
   candidates: CandidateVar[];
   stdout: string;

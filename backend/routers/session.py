@@ -11,7 +11,7 @@ from config import TEMP_ROOT
 from debugger import LLDBController
 from session_manager import session_manager
 from snapshot import build_snapshot
-from annotations import Annotation, parse_annotations, get_watched_vars
+from annotations import Annotation, parse_annotations, get_show_vars
 from diff import compute_diff
 from memory_walker import MemoryWalker
 from state import (
@@ -87,7 +87,7 @@ async def load_code(session_id: str, body: dict):
             front_var=item.get("front_var", ""),
             rear_var=item.get("rear_var", ""),
             mode=item.get("mode", ""),
-            watched_vars=item.get("watched_vars", []),
+            show_vars=item.get("show_vars", []),
         )
         # Avoid duplicates: skip if same name already parsed from code
         if not any(a.name == ann.name and a.struct_type == ann.struct_type for a in code_annotations):
@@ -204,7 +204,7 @@ async def step(session_id: str, body: dict | None = None):
         # Compute diff
         curr_structures = snapshot.get("heap_structures", [])
         prev_structures = get_prev_structures(session_id)
-        diff_actions = compute_diff(prev_structures, curr_structures, watched_vars=get_watched_vars(annotations))
+        diff_actions = compute_diff(prev_structures, curr_structures, show_vars=get_show_vars(annotations))
         store_prev_structures(session_id, curr_structures)
 
         # Push to history, clear future
@@ -258,7 +258,7 @@ async def step_back(session_id: str, body: dict | None = None):
     # Compute diff for animations on back
     curr = session.history[-1].get("heap_structures", [])
     anns = get_annotations(session_id)
-    diffs = compute_diff(get_prev_structures(session_id), curr, watched_vars=get_watched_vars(anns))
+    diffs = compute_diff(get_prev_structures(session_id), curr, show_vars=get_show_vars(anns))
     store_prev_structures(session_id, curr)
 
     return {
@@ -289,7 +289,7 @@ async def step_forward(session_id: str):
     # Compute diff for animations on forward
     curr = snapshot.get("heap_structures", [])
     anns = get_annotations(session_id)
-    diffs = compute_diff(get_prev_structures(session_id), curr, watched_vars=get_watched_vars(anns))
+    diffs = compute_diff(get_prev_structures(session_id), curr, show_vars=get_show_vars(anns))
     store_prev_structures(session_id, curr)
 
     return {
@@ -326,7 +326,7 @@ async def run_to(session_id: str, body: dict | None = None):
 
         curr_structures = snapshot.get("heap_structures", [])
         prev_structures = get_prev_structures(session_id)
-        diff_actions = compute_diff(prev_structures, curr_structures, watched_vars=get_watched_vars(annotations))
+        diff_actions = compute_diff(prev_structures, curr_structures, show_vars=get_show_vars(annotations))
         store_prev_structures(session_id, curr_structures)
 
         session.history.append(snapshot)

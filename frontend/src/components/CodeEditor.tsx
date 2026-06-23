@@ -171,7 +171,7 @@ export default function CodeEditor() {
         fields[field.key] = detectedVars[0];
       } else if (field.key === 'name' && detectedVars.length > 0) {
         fields[field.key] = detectedVars[0];
-      } else if (field.key === 'watched_vars') {
+      } else if (field.key === 'show_vars') {
         fields[field.key] = detectedVars.join(', ');
       } else {
         fields[field.key] = field.placeholder;

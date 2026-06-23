@@ -21,7 +21,7 @@ class DiffAction:
 def compute_diff(
     prev_structures: list[dict],
     curr_structures: list[dict],
-    watched_vars: list[str] | None = None,
+    show_vars: list[str] | None = None,
 ) -> list[DiffAction]:
     """Compare two sets of heap_structures and return diff actions.
 
@@ -138,16 +138,16 @@ def compute_diff(
                 ))
 
     # ------------------------------------------------------------------
-    # Post-processing: sort-action detection via watched pointer positions
+    # Post-processing: sort-action detection via show variable positions
     # ------------------------------------------------------------------
-    # Uses pointers_pointing_here on nodes + watched_vars to directly
+    # Uses pointers_pointing_here on nodes + show_vars to directly
     # detect sorting comparisons and swaps, rather than relying solely on
     # cross-matching value_changed actions.
     for name, curr_struct in curr_by_name.items():
         prev_struct = prev_by_name.get(name)
         if prev_struct is None:
             continue
-        sort_actions = _detect_sort_actions(prev_struct, curr_struct, watched_vars)
+        sort_actions = _detect_sort_actions(prev_struct, curr_struct, show_vars)
         if sort_actions:
             # Replace individual value_changed actions that are part of swaps
             swapped_addrs: set[str] = set()
@@ -194,12 +194,12 @@ def compute_diff(
 def _detect_sort_actions(
     prev_struct: dict,
     curr_struct: dict,
-    watched_vars: list[str] | None,
+    show_vars: list[str] | None,
 ) -> list[DiffAction]:
-    """Detect sorting comparisons and swaps using watched pointer positions.
+    """Detect sorting comparisons and swaps using show variable positions.
 
     Uses the pointers_pointing_here on each node to determine which
-    elements are being watched at each step. If two watched pointers
+    elements are being watched at each step. If two show variables
     point to different nodes, those nodes are being compared.
     If the values at those nodes cross-matched, a swap occurred.
 
@@ -209,7 +209,7 @@ def _detect_sort_actions(
     - It detects swaps by comparing current pointer positions, not
       just by inferring from value_changed cross-matches
     """
-    if not watched_vars:
+    if not show_vars:
         return []
 
     actions: list[DiffAction] = []
@@ -221,18 +221,18 @@ def _detect_sort_actions(
     prev_ptrs: dict[str, str] = {}
     for addr, n in prev_nodes.items():
         for ptr in n.get("pointers_pointing_here", []):
-            if ptr in watched_vars:
+            if ptr in show_vars:
                 prev_ptrs[ptr] = addr
 
     curr_ptrs: dict[str, str] = {}
     for addr, n in curr_nodes.items():
         for ptr in n.get("pointers_pointing_here", []):
-            if ptr in watched_vars:
+            if ptr in show_vars:
                 curr_ptrs[ptr] = addr
 
-    # Find watched pointers that changed target address
+    # Find show variables that changed target address
     moved: list[tuple[str, str | None, str]] = []
-    for ptr in watched_vars:
+    for ptr in show_vars:
         prev_addr = prev_ptrs.get(ptr)
         curr_addr = curr_ptrs.get(ptr)
         if curr_addr and prev_addr != curr_addr:
@@ -241,7 +241,7 @@ def _detect_sort_actions(
     structure_name = curr_struct.get("annotation_name", "")
 
     # ---- Comparison detection ----
-    # When 2+ watched pointers are pointing to different nodes in a
+    # When 2+ show variables are pointing to different nodes in a
     # sorting structure, those nodes are being compared.
     if len(moved) >= 2:
         nodes_involved = [m[2] for m in moved[:2] if m[2]]
@@ -257,7 +257,7 @@ def _detect_sort_actions(
     # ---- Swap detection ----
     # A swap is detected when two nodes swap their "val" fields.
     # Use the cached value_changed cross-match approach as primary signal,
-    # and also check watched pointer positions as secondary validation.
+    # and also check show variable positions as secondary validation.
     #
     # First: collect value changes visible in the structure nodes.
     val_changes: list[tuple[str, str, str, str]] = []  # (addr, old_val, new_val, field_name)
@@ -289,7 +289,7 @@ def _detect_sort_actions(
                 # Only report each pair once
                 break
 
-    # Third: also check if watched pointers themselves indicate a swap
+    # Third: also check if show variables themselves indicate a swap
     # (pointers swapped targets between two nodes)
     if len(moved) >= 2:
         for i in range(len(moved)):
