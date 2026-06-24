@@ -11,7 +11,7 @@
 | [01-product-overview.md](01-product-overview.md) | 产品概述 — 核心功能、数据结构三级清单、不做什么 |
 | [02-architecture.md](02-architecture.md) | 架构总览 — 前后端架构图 |
 | [03-backend.md](03-backend.md) | 后端设计 — 技术选型、API、LLDB Controller、快照、内存遍历器、安全隔离 |
-| [04-frontend.md](04-frontend.md) | 前端设计 — 技术选型、页面布局、可视化渲染、标注系统、动画、状态机 |
+| [04-frontend.md](04-frontend.md) | 前端设计 — “Graph Paper” 浅色视觉系统：Design Token、组件样式、Monaco 主题、10 种 Canvas 渲染器规格、动画映射表、状态机、UX 清单 |
 | [05-communication.md](05-communication.md) | 通信协议 — WebSocket 消息格式、通信模式 |
 | [06-visualization.md](06-visualization.md) | 数据结构可视化方案 — 标注设计哲学、自动识别、快照差分、代码图形互锁 |
 | [07-roadmap.md](07-roadmap.md) | 开发路线图 — v0.1 到 v0.10 全部迭代记录 |
