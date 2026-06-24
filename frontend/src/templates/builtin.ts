@@ -207,6 +207,58 @@ int main() {
 `,
   },
   {
+    id: 'kmp_search',
+    label: 'KMP 字符串匹配',
+    icon: '🔍',
+    description: 'KMP 算法 — next 数组预处理 + 模式串快速匹配',
+    code: `#include <iostream>
+#include <cstring>
+using namespace std;
+
+// @viz array(T) var=text.length_var=n
+// @viz array(N) var=next_val.length_var=m
+// @viz show(i, j)
+int main() {
+    char text[] = "ababcabcabababd";
+    int n = strlen(text);
+    char pattern[] = "ababd";
+    int m = strlen(pattern);
+
+    // 构建 next 数组（最长公共前后缀）
+    int next_val[10];
+    next_val[0] = 0;
+    int len = 0;
+    for (int k = 1; k < m; k++) {
+        while (len > 0 && pattern[k] != pattern[len])
+            len = next_val[len - 1];
+        if (pattern[k] == pattern[len]) len++;
+        next_val[k] = len;
+    }
+
+    // KMP 匹配
+    int i = 0, j = 0;
+    while (i < n) {
+        if (text[i] == pattern[j]) {
+            i++;
+            j++;
+        }
+        if (j == m) {
+            cout << "found at " << (i - j) << endl;
+            j = next_val[j - 1];
+        } else if (i < n && text[i] != pattern[j]) {
+            if (j != 0)
+                j = next_val[j - 1];
+            else
+                i++;
+        }
+    }
+
+    cout << "done" << endl;
+    return 0;
+}
+`,
+  },
+  {
     id: 'bst_insert',
     label: 'BST 插入构建',
     icon: '🌳',
@@ -336,6 +388,201 @@ int main() {
         arr[i] = arr[minIdx];
         arr[minIdx] = tmp;
     }
+
+    cout << "sorted" << endl;
+    return 0;
+}
+`,
+  },
+  {
+    id: 'insertion_sort',
+    label: '插入排序',
+    icon: '📊',
+    description: '插入排序（构建有序序列，未排序元素依次插入）',
+    code: `#include <iostream>
+using namespace std;
+
+// @viz array(A) var=arr.length_var=n
+// @viz show(i, j, key)
+int main() {
+    int arr[] = {5, 2, 8, 1, 9, 3, 7, 6};
+    int n = 8;
+
+    // 插入排序
+    for (int i = 1; i < n; i++) {
+        int key = arr[i];
+        int j = i - 1;
+        while (j >= 0 && arr[j] > key) {
+            arr[j + 1] = arr[j];
+            j--;
+        }
+        arr[j + 1] = key;
+    }
+
+    cout << "sorted" << endl;
+    return 0;
+}
+`,
+  },
+  {
+    id: 'shell_sort',
+    label: '希尔排序',
+    icon: '📊',
+    description: '希尔排序（增量递减的插入排序，gap 序列 n/2→1）',
+    code: `#include <iostream>
+using namespace std;
+
+// @viz array(A) var=arr.length_var=n
+// @viz show(i, j, gap)
+int main() {
+    int arr[] = {5, 2, 8, 1, 9, 3, 7, 6};
+    int n = 8;
+
+    // 希尔排序
+    for (int gap = n / 2; gap > 0; gap /= 2) {
+        for (int i = gap; i < n; i++) {
+            int temp = arr[i];
+            int j = i;
+            while (j >= gap && arr[j - gap] > temp) {
+                arr[j] = arr[j - gap];
+                j -= gap;
+            }
+            arr[j] = temp;
+        }
+    }
+
+    cout << "sorted" << endl;
+    return 0;
+}
+`,
+  },
+  {
+    id: 'quick_sort',
+    label: '快速排序',
+    icon: '📊',
+    description: '快速排序（分区 + 递归，pivot 为区间最右元素）',
+    code: `#include <iostream>
+using namespace std;
+
+// @viz array(A) var=arr.length_var=n
+void swapArr(int arr[], int i, int j) {
+    int t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+}
+
+int partition(int arr[], int lo, int hi) {
+    int pivot = arr[hi];
+    int i = lo - 1;
+    for (int j = lo; j < hi; j++) {
+        if (arr[j] < pivot) {
+            i++;
+            swapArr(arr, i, j);
+        }
+    }
+    swapArr(arr, i + 1, hi);
+    return i + 1;
+}
+
+void quickSort(int arr[], int lo, int hi) {
+    if (lo < hi) {
+        int pi = partition(arr, lo, hi);
+        quickSort(arr, lo, pi - 1);
+        quickSort(arr, pi + 1, hi);
+    }
+}
+
+int main() {
+    int arr[] = {5, 2, 8, 1, 9, 3, 7, 6};
+    int n = 8;
+
+    quickSort(arr, 0, n - 1);
+
+    cout << "sorted" << endl;
+    return 0;
+}
+`,
+  },
+  {
+    id: 'heap_sort',
+    label: '堆排序',
+    icon: '📊',
+    description: '堆排序（建大顶堆 + 交换堆顶/末尾 + 下沉调整）',
+    code: `#include <iostream>
+using namespace std;
+
+// @viz array(A) var=arr.length_var=n
+// @viz show(largest, l, r)
+void heapify(int arr[], int n, int i) {
+    int largest = i;
+    int l = 2 * i + 1;
+    int r = 2 * i + 2;
+    if (l < n && arr[l] > arr[largest]) largest = l;
+    if (r < n && arr[r] > arr[largest]) largest = r;
+    if (largest != i) {
+        int tmp = arr[i]; arr[i] = arr[largest]; arr[largest] = tmp;
+        heapify(arr, n, largest);
+    }
+}
+
+int main() {
+    int arr[] = {5, 2, 8, 1, 9, 3, 7, 6};
+    int n = 8;
+
+    // 建堆
+    for (int i = n / 2 - 1; i >= 0; i--)
+        heapify(arr, n, i);
+
+    // 排序
+    for (int i = n - 1; i > 0; i--) {
+        int tmp = arr[0]; arr[0] = arr[i]; arr[i] = tmp;
+        heapify(arr, i, 0);
+    }
+
+    cout << "sorted" << endl;
+    return 0;
+}
+`,
+  },
+  {
+    id: 'merge_sort',
+    label: '归并排序',
+    icon: '📊',
+    description: '归并排序（分治 — 递归拆分 + 二路归并）',
+    code: `#include <iostream>
+using namespace std;
+
+// @viz array(A) var=arr.length_var=n
+void merge(int arr[], int l, int m, int r) {
+    int n1 = m - l + 1;
+    int n2 = r - m;
+    int* L = new int[n1];
+    int* R = new int[n2];
+    for (int i = 0; i < n1; i++) L[i] = arr[l + i];
+    for (int j = 0; j < n2; j++) R[j] = arr[m + 1 + j];
+    int i = 0, j = 0, k = l;
+    while (i < n1 && j < n2) {
+        if (L[i] <= R[j]) arr[k++] = L[i++];
+        else arr[k++] = R[j++];
+    }
+    while (i < n1) arr[k++] = L[i++];
+    while (j < n2) arr[k++] = R[j++];
+    delete[] L;
+    delete[] R;
+}
+
+void mergeSort(int arr[], int l, int r) {
+    if (l < r) {
+        int m = l + (r - l) / 2;
+        mergeSort(arr, l, m);
+        mergeSort(arr, m + 1, r);
+        merge(arr, l, m, r);
+    }
+}
+
+int main() {
+    int arr[] = {5, 2, 8, 1, 9, 3, 7, 6};
+    int n = 8;
+
+    mergeSort(arr, 0, n - 1);
 
     cout << "sorted" << endl;
     return 0;

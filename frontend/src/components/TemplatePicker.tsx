@@ -26,8 +26,12 @@ const CATEGORIES: Category[] = [
     ids: ['max_heap', 'graph_adjlist', 'graph_adjmatrix', 'bfs_traversal', 'dfs_traversal'],
   },
   {
-    name: '数组 / 查找',
-    ids: ['bubble_sort', 'selection_sort', 'binary_search'],
+    name: '排序算法',
+    ids: ['bubble_sort', 'selection_sort', 'insertion_sort', 'shell_sort', 'quick_sort', 'heap_sort', 'merge_sort'],
+  },
+  {
+    name: '查找',
+    ids: ['binary_search', 'kmp_search'],
   },
   {
     name: '哈希表',
@@ -173,6 +177,7 @@ export default function TemplatePicker() {
             {/* Search bar */}
             <div style={{
               padding: '10px 12px',
+              background: 'var(--color-page)',
               borderBottom: 'var(--border-hairline)',
               display: 'flex',
               alignItems: 'center',
@@ -221,6 +226,7 @@ export default function TemplatePicker() {
               flex: 1,
               overflowY: 'auto',
               padding: '10px 12px 14px',
+              background: 'var(--color-page)',
             }}>
               {filteredCategories.length === 0 ? (
                 <div style={{
