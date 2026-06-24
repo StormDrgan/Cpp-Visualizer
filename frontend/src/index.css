@@ -75,6 +75,12 @@ body {
   background: var(--color-text-tertiary);
 }
 
+/* ── Animation ──────────────────────────────────────────────────────────── */
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 /* ── Utility ───────────────────────────────────────────────────────────── */
 
 .mono {

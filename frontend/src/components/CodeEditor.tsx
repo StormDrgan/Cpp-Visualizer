@@ -2,6 +2,7 @@ import { useRef, useCallback, useEffect, useState } from 'react';
 import Editor, { type OnMount } from '@monaco-editor/react';
 import { useStore } from '../store/useStore';
 import { STRUCT_TYPES, detectVariables, insertAnnotationAbove } from '../utils/annotations';
+import AiPanel from './AiPanel';
 
 export default function CodeEditor() {
   const code = useStore((s) => s.code);
@@ -279,6 +280,9 @@ export default function CodeEditor() {
         </div>
 
         <div style={{ flex: 1 }} />
+
+        {/* AI Analyze */}
+        <AiPanel />
 
         {/* Run button */}
         <button
