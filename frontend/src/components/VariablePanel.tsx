@@ -163,60 +163,8 @@ export default function VariablePanel() {
         )}
       </div>
 
-      {/* 程序输出 */}
-      <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', flexShrink: showOutput ? 0 : undefined }}>
-        <div
-          style={{
-            height: 32, background: '#fafafa',
-            borderTop: '2px solid #e8e8e8',
-            borderBottom: showOutput ? '1px solid #e8e8e8' : 'none',
-            display: 'flex', alignItems: 'center', padding: '0 12px', flexShrink: 0,
-            cursor: 'pointer',
-          }}
-          onClick={() => setShowOutput(!showOutput)}
-        >
-          <span style={{ fontSize: 12, fontWeight: 600, color: '#555' }}>💻 程序输出</span>
-          {stdout.length > 0 && (
-            <span
-              style={{
-                fontSize: 10, color: '#999', background: '#eee',
-                borderRadius: 8, padding: '1px 6px', marginLeft: 6,
-              }}
-            >
-              {stdout.split('\n').filter(Boolean).length} 行
-            </span>
-          )}
-          <span style={{ marginLeft: 'auto', fontSize: 10, color: '#ccc', transform: showOutput ? 'rotate(180deg)' : undefined, transition: 'transform 0.2s' }}>
-            ▼
-          </span>
-        </div>
-
-        {showOutput && (
-          <div style={{ maxHeight: 140, overflowY: 'auto' }}>
-            {stdout.length === 0 ? (
-              <div
-                style={{
-                  fontSize: 12, color: '#bbb', padding: 16,
-                  textAlign: 'center', fontStyle: 'italic',
-                }}
-              >
-                暂无输出
-              </div>
-            ) : (
-              <pre
-                style={{
-                  margin: 0, padding: '8px 12px',
-                  fontSize: 12, fontFamily: 'SF Mono, Menlo, Monaco, monospace',
-                  color: '#333', lineHeight: '1.6', whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word',
-                }}
-              >
-                {stdout}
-              </pre>
-            )}
-          </div>
-        )}
-      </div>
+      {/* 标注管理 — @viz panel */}
+      <AnnotationPanel />
 
       {/* 可视化目标 — §v0.8 click-to-select checkboxes */}
       {candidates.length > 0 && (
@@ -319,8 +267,60 @@ export default function VariablePanel() {
         </div>
       )}
 
-      {/* 标注管理 — @viz panel */}
-      <AnnotationPanel />
+      {/* 程序输出 */}
+      <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', flexShrink: showOutput ? 0 : undefined }}>
+        <div
+          style={{
+            height: 32, background: '#fafafa',
+            borderTop: '2px solid #e8e8e8',
+            borderBottom: showOutput ? '1px solid #e8e8e8' : 'none',
+            display: 'flex', alignItems: 'center', padding: '0 12px', flexShrink: 0,
+            cursor: 'pointer',
+          }}
+          onClick={() => setShowOutput(!showOutput)}
+        >
+          <span style={{ fontSize: 12, fontWeight: 600, color: '#555' }}>💻 程序输出</span>
+          {stdout.length > 0 && (
+            <span
+              style={{
+                fontSize: 10, color: '#999', background: '#eee',
+                borderRadius: 8, padding: '1px 6px', marginLeft: 6,
+              }}
+            >
+              {stdout.split('\n').filter(Boolean).length} 行
+            </span>
+          )}
+          <span style={{ marginLeft: 'auto', fontSize: 10, color: '#ccc', transform: showOutput ? 'rotate(180deg)' : undefined, transition: 'transform 0.2s' }}>
+            ▼
+          </span>
+        </div>
+
+        {showOutput && (
+          <div style={{ maxHeight: 140, overflowY: 'auto' }}>
+            {stdout.length === 0 ? (
+              <div
+                style={{
+                  fontSize: 12, color: '#bbb', padding: 16,
+                  textAlign: 'center', fontStyle: 'italic',
+                }}
+              >
+                暂无输出
+              </div>
+            ) : (
+              <pre
+                style={{
+                  margin: 0, padding: '8px 12px',
+                  fontSize: 12, fontFamily: 'SF Mono, Menlo, Monaco, monospace',
+                  color: '#333', lineHeight: '1.6', whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                }}
+              >
+                {stdout}
+              </pre>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* 调用栈 */}
       <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', flexShrink: showCallStack ? 0 : undefined }}>

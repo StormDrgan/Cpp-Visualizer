@@ -11,7 +11,20 @@
       "Bash(git -C /Users/ljc/Documents/Code/Test/cpp-visualizer diff --stat)",
       "Bash(git -C /Users/ljc/Documents/Code/Test/cpp-visualizer add backend/annotations.py backend/lldb_walkers.py backend/memory_walker.py backend/snapshot.py frontend/src/components/VariablePanel.tsx frontend/src/templates/builtin.ts)",
       "Bash(git -C /Users/ljc/Documents/Code/Test/cpp-visualizer commit -m 'feat: 修复栈节点计数\\(top+1\\) + 新增 @viz show\\(\\) 监视表达式注解 *)",
-      "Bash(/Users/ljc/Documents/Code/Test/cpp-visualizer/frontend/node_modules/.bin/tsc --project /Users/ljc/Documents/Code/Test/cpp-visualizer/frontend/tsconfig.json --noEmit)"
+      "Bash(/Users/ljc/Documents/Code/Test/cpp-visualizer/frontend/node_modules/.bin/tsc --project /Users/ljc/Documents/Code/Test/cpp-visualizer/frontend/tsconfig.json --noEmit)",
+      "Bash(gh repo *)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(git clone *)",
+      "Bash(curl -sL --connect-timeout 10 --max-time 30 \"https://api.github.com/repos/anthropics/skills/contents/skills/frontend-design\")",
+      "Bash(curl -sL --connect-timeout 10 --max-time 30 \"https://raw.githubusercontent.com/anthropics/skills/main/skills/frontend-design/SKILL.md\")",
+      "Bash(ls -la /Users/ljc/Documents/Code/Test/cpp-visualizer/.claude/skills/ 2>/dev/null; echo \"---\"; ls -la ~/.claude/skills/ 2>/dev/null)",
+      "Read(//Users/ljc/.claude/**)",
+      "Bash(mkdir -p /Users/ljc/Documents/Code/Test/cpp-visualizer/.claude/skills/frontend-design)",
+      "Bash(curl -sL --connect-timeout 10 --max-time 30 \"https://raw.githubusercontent.com/anthropics/skills/main/skills/frontend-design/LICENSE.txt\")",
+      "Edit(/.claude/skills/frontend-design/**)"
+    ],
+    "additionalDirectories": [
+      "/Users/ljc/Documents/Code/Test/cpp-visualizer/.claude/skills"
     ]
   }
 }
