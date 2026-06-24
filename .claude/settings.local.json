@@ -27,7 +27,9 @@
       "Bash(curl -s http://localhost:8000/api/sessions)",
       "Bash(curl -s -X POST http://localhost:8000/api/sessions -H 'Content-Type: application/json' -d '{\"template_id\": \"stack_sequential\"}')",
       "Bash(python3.11 -m json.tool)",
-      "Bash(node_modules/.bin/tsc --noEmit)"
+      "Bash(node_modules/.bin/tsc --noEmit)",
+      "Bash(git -C /Users/ljc/Documents/Code/Test/cpp-visualizer add DESIGN.md DESIGN-FRONTEND.md frontend/)",
+      "Bash(git -C /Users/ljc/Documents/Code/Test/cpp-visualizer commit -m 'feat: '\\\\''Graph Paper'\\\\'' 浅色主题前端视觉重设计 *)"
     ]
   }
 }

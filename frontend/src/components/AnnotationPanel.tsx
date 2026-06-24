@@ -104,7 +104,7 @@ export default function AnnotationPanel() {
           letterSpacing: '0.03em',
           textTransform: 'uppercase',
         }}>
-          Annotations
+          🏷️ 标注管理
         </span>
         {annotations.length > 0 && (
           <span style={{

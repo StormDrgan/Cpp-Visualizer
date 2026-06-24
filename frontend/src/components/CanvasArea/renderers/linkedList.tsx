@@ -42,7 +42,7 @@ export function renderLinkedList(
     elements.push(
       <Arrow
         key={`arrow-fwd-${i}`}
-        points={[from.cx + NODE_W / 2 + 4, from.cy - 6, to.cx - NODE_W / 2 - 4, to.cy - 6]}
+        points={[from.cx + NODE_W / 2 + 4, from.cy, to.cx - NODE_W / 2 - 4, to.cy]}
         pointerLength={8} pointerWidth={8}
         fill={EDGE_STROKE} stroke={EDGE_STROKE} strokeWidth={EDGE_WIDTH}
       />
@@ -52,7 +52,7 @@ export function renderLinkedList(
       elements.push(
         <Arrow
           key={`arrow-bwd-${i}`}
-          points={[to.cx - NODE_W / 2 - 4, to.cy + 6, from.cx + NODE_W / 2 + 4, from.cy + 6]}
+          points={[to.cx - NODE_W / 2 - 4, to.cy + 8, from.cx + NODE_W / 2 + 4, from.cy + 8]}
           pointerLength={8} pointerWidth={8}
           fill={EDGE_STROKE} stroke={EDGE_STROKE} strokeWidth={EDGE_WIDTH}
         />

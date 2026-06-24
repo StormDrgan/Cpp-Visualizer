@@ -89,7 +89,7 @@ export default function VariablePanel() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
 
-      {/* ── Local Variables ─────────────────────────────────────── */}
+      {/* ── 📦 局部变量 ─────────────────────────────────────── */}
       <div style={{
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
         flex: showLocals ? '1 1 auto' : '0 0 auto', minHeight: 0,
@@ -102,7 +102,7 @@ export default function VariablePanel() {
           }}
           onClick={() => setShowLocals(!showLocals)}
         >
-          <span style={sectionLabel}>Local Variables</span>
+          <span style={sectionLabel}>📦 局部变量</span>
           {locals.length > 0 && <span style={sectionBadge}>{locals.length}</span>}
           {arrow(showLocals)}
         </div>
@@ -128,9 +128,9 @@ export default function VariablePanel() {
                     fontWeight: 500,
                     textTransform: 'uppercase',
                   }}>
-                    <th style={{ padding: '4px 8px', fontWeight: 500, textAlign: 'center' }}>Name</th>
-                    <th style={{ padding: '4px 8px', fontWeight: 500, textAlign: 'center' }}>Type</th>
-                    <th style={{ padding: '4px 8px', fontWeight: 500, textAlign: 'center' }}>Value</th>
+                    <th style={{ padding: '4px 8px', fontWeight: 500, textAlign: 'center' }}>变量名</th>
+                    <th style={{ padding: '4px 8px', fontWeight: 500, textAlign: 'center' }}>类型</th>
+                    <th style={{ padding: '4px 8px', fontWeight: 500, textAlign: 'center' }}>值</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -205,7 +205,7 @@ export default function VariablePanel() {
             }}
             onClick={() => setShowTargets(!showTargets)}
           >
-            <span style={sectionLabel}>Viz Targets</span>
+            <span style={sectionLabel}>🎯 可视化目标</span>
             <span style={{
               ...sectionBadge,
               color: 'var(--color-teal)',
@@ -309,10 +309,10 @@ export default function VariablePanel() {
           }}
           onClick={() => setShowOutput(!showOutput)}
         >
-          <span style={sectionLabel}>Stdout</span>
+          <span style={sectionLabel}>💻 程序输出</span>
           {stdout.length > 0 && (
             <span style={sectionBadge}>
-              {stdout.split('\n').filter(Boolean).length} lines
+              {stdout.split('\n').filter(Boolean).length} 行
             </span>
           )}
           {arrow(showOutput)}
@@ -343,7 +343,7 @@ export default function VariablePanel() {
         )}
       </div>
 
-      {/* ── Call Stack ──────────────────────────────────────────── */}
+      {/* ── 📚 调用栈 ──────────────────────────────────────────── */}
       <div style={{
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
         flexShrink: showCallStack ? 0 : undefined,
@@ -356,7 +356,7 @@ export default function VariablePanel() {
           }}
           onClick={() => setShowCallStack(!showCallStack)}
         >
-          <span style={sectionLabel}>Call Stack</span>
+          <span style={sectionLabel}>📚 调用栈</span>
           {callStack.length > 0 && <span style={sectionBadge}>{callStack.length}</span>}
           {arrow(showCallStack)}
         </div>
