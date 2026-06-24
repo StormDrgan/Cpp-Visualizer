@@ -1,0 +1,161 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   C/C++ Visualizer — "Graph Paper" Design Tokens
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Google Fonts ─────────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+/* ── Typography ───────────────────────────────────────────────────────── */
+:root {
+  --font-ui: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, Monaco, monospace;
+
+  /* Type scale */
+  --text-display: 14px;
+  --text-body: 13px;
+  --text-ui: 12px;
+  --text-caption: 11px;
+  --text-code: 13px;
+  --text-canvas-node: 12px;
+  --text-canvas-label: 10px;
+
+  --leading-body: 1.5;
+  --leading-dense: 1.2;
+  --leading-code: 22px;
+
+  --tracking-display: 0.04em;
+  --tracking-section: 0.03em;
+}
+
+/* ── Color Palette ────────────────────────────────────────────────────── */
+:root {
+
+  /* Backgrounds */
+  --color-page: #fafaf7;
+  --color-surface: #ffffff;
+  --color-surface-alt: #f5f4f0;
+
+  /* Borders & dividers */
+  --color-border: #e4e1da;
+  --color-grid: #ece9e2;
+
+  /* Text */
+  --color-text: #1c1c1c;
+  --color-text-secondary: #6b6b65;
+  --color-text-tertiary: #9c9b95;
+
+  /* Ink Blue — primary accent (actions, focus, execution line, active nodes) */
+  --color-ink: #1e4d7b;
+  --color-ink-light: #eaf1f7;
+  --color-ink-hover: #163d62;
+
+  /* Copper — pointer accent (pointer labels, memory addresses, warnings) */
+  --color-copper: #b8703d;
+  --color-copper-light: #fdf3e8;
+
+  /* Teal — data accent (edges, data nodes, success states) */
+  --color-teal: #2d8a7b;
+  --color-teal-light: #edf7f5;
+
+  /* Red — error/breakpoint (correction-mark red) */
+  --color-red: #c4312b;
+  --color-red-light: #fef5f5;
+
+  /* ── Semantic Status Colors ─────────────────────────────────────── */
+
+  --status-idle: #9c9b95;
+  --status-ready: #1e4d7b;
+  --status-stepping: #2d8a7b;
+  --status-running: #2d8a7b;
+  --status-rewinding: #b8703d;
+  --status-paused: #1e4d7b;
+  --status-terminated: #6b6b65;
+  --status-error: #c4312b;
+}
+
+/* ── Spacing (4px base) ───────────────────────────────────────────────── */
+:root {
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+}
+
+/* ── Border Radius ────────────────────────────────────────────────────── */
+:root {
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+}
+
+/* ── Shadows ──────────────────────────────────────────────────────────── */
+:root {
+  --shadow-popover: 0 4px 24px rgba(0, 0, 0, 0.10);
+
+  /* Semantic border tokens */
+  --border-hairline: 1px solid var(--color-border);
+  --border-focus: 2px solid var(--color-ink);
+  --border-active: 1.5px solid var(--color-ink);
+}
+
+/* ── Canvas ───────────────────────────────────────────────────────────── */
+:root {
+  --canvas-dot-spacing: 24px;
+  --canvas-dot-radius: 1px;
+  --canvas-dot-color: #ece9e2;
+
+  /* Node shapes */
+  --canvas-node-radius-rect: 4px;
+  --canvas-node-radius-circle: 20px;
+
+  /* Node colors — default */
+  --canvas-node-fill: #ffffff;
+  --canvas-node-stroke: #e4e1da;
+  --canvas-node-stroke-width: 1.5px;
+
+  /* Node colors — with pointer */
+  --canvas-node-pointed-fill: #ffffff;
+  --canvas-node-pointed-stroke: #1e4d7b;
+
+  /* Node colors — active / current operation */
+  --canvas-node-active-fill: #eaf1f7;
+  --canvas-node-active-stroke: #1e4d7b;
+
+  /* Edges */
+  --canvas-edge-stroke: #2d8a7b;
+  --canvas-edge-width: 1.5px;
+
+  /* Pointer labels */
+  --canvas-pointer-line: #b8703d;
+  --canvas-pointer-tag-fill: #ffffff;
+  --canvas-pointer-tag-stroke: #b8703d;
+  --canvas-pointer-text: #b8703d;
+  --canvas-pointer-font-size: 10px;
+
+  /* Text */
+  --canvas-text-fill: #1c1c1c;
+  --canvas-text-secondary: #6b6b65;
+  --canvas-text-tertiary: #9c9b95;
+
+  /* Empty state */
+  --canvas-empty-fill: #f5f4f0;
+  --canvas-empty-stroke: #e4e1da;
+
+  /* Animation */
+  --anim-compare-fill: #eaf1f7;
+  --anim-swap-fill: #fdf3e8;
+  --anim-created-scale-start: 0.6;
+  --anim-duration-fast: 150ms;
+  --anim-duration-normal: 250ms;
+  --anim-duration-slow: 300ms;
+}
+
+/* ── Reduced Motion ───────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --anim-duration-fast: 0ms;
+    --anim-duration-normal: 0ms;
+    --anim-duration-slow: 0ms;
+  }
+}

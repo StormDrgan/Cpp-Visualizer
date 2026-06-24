@@ -1,20 +1,22 @@
 import { useState, useRef, useEffect } from 'react';
 import { useStore } from '../store/useStore';
 
-const 按钮样式: React.CSSProperties = {
+const baseBtn: React.CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',
   gap: 4,
-  height: 30,
-  padding: '0 12px',
+  height: 28,
+  padding: '0 10px',
   fontSize: 12,
   fontWeight: 500,
-  color: '#555',
-  background: '#fff',
-  border: '1px solid #d9d9d9',
-  borderRadius: 4,
+  fontFamily: 'var(--font-ui)',
+  color: 'var(--color-text-secondary)',
+  background: 'transparent',
+  border: 'none',
+  borderRadius: 'var(--radius-md)',
   cursor: 'pointer',
+  outline: 'none',
   transition: 'all 0.15s',
 };
 
@@ -36,7 +38,6 @@ export default function ControlBar() {
   const histPanelRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to current step when opening
   useEffect(() => {
     if (histOpen && listRef.current) {
       const activeEl = listRef.current.querySelector('[data-active="true"]');
@@ -46,7 +47,6 @@ export default function ControlBar() {
     }
   }, [histOpen]);
 
-  // Close on outside click
   useEffect(() => {
     if (!histOpen) return;
     const onDown = (e: MouseEvent) => {
@@ -75,7 +75,6 @@ export default function ControlBar() {
   const totalSteps = historySteps.length;
   const lines = code.split('\n');
 
-  // Build step list items
   const stepItems = historySteps.map((s) => {
     const lineText = lines[s.source_line - 1]?.trim() ?? '';
     const summary = lineText.length > 60
@@ -84,43 +83,37 @@ export default function ControlBar() {
     return { ...s, summary };
   });
 
-  const 主按钮样式: React.CSSProperties = {
-    ...按钮样式,
-    background: canStep ? '#1a73e8' : '#f5f5f5',
-    color: canStep ? '#fff' : '#bbb',
-    border: canStep ? '1px solid #1a73e8' : '1px solid #d9d9d9',
+  const primaryBtn: React.CSSProperties = {
+    ...baseBtn,
+    background: canStep ? 'var(--color-ink)' : 'var(--color-surface-alt)',
+    color: canStep ? '#ffffff' : 'var(--color-text-tertiary)',
     fontWeight: 600,
   };
 
-  const 次要按钮样式: React.CSSProperties = {
-    ...按钮样式,
-    background: canStep ? '#fff' : '#fafafa',
-    color: canStep ? '#555' : '#ccc',
+  const secondaryBtn: React.CSSProperties = {
+    ...baseBtn,
+    color: canStep ? 'var(--color-text-secondary)' : 'var(--color-text-tertiary)',
   };
 
   return (
     <div
       style={{
-        height: 40,
-        background: '#fff',
-        borderTop: '1px solid #e0e0e0',
+        height: 36,
+        background: 'var(--color-surface)',
+        borderTop: 'var(--border-hairline)',
         display: 'flex',
         alignItems: 'center',
-        padding: '0 10px',
-        gap: 4,
+        padding: '0 8px',
+        gap: 2,
         flexShrink: 0,
       }}
     >
-      {/* 重置 */}
+      {/* Reset */}
       <button
         onClick={reset}
         disabled={isIdle || isBusy}
-        style={{
-          ...按钮样式,
-          color: '#888',
-          fontWeight: 600,
-        }}
-        title="回到起点"
+        style={{ ...baseBtn, color: 'var(--color-text-secondary)', fontWeight: 500 }}
+        title="回到起点 (Reset)"
       >
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M1 4v6h6" />
@@ -129,15 +122,10 @@ export default function ControlBar() {
         重置
       </button>
 
-      <div style={{ width: 1, height: 20, background: '#e8e8e8', margin: '0 4px' }} />
+      <div style={{ width: 1, height: 20, background: 'var(--color-border)', margin: '0 4px' }} />
 
-      {/* 后退 */}
-      <button
-        onClick={() => back(1)}
-        disabled={!canStep}
-        style={次要按钮样式}
-        title="后退一步"
-      >
+      {/* Back */}
+      <button onClick={() => back(1)} disabled={!canStep} style={secondaryBtn} title="后退一步">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
           <path d="M7 6l-6 6 6 6V6z" />
           <path d="M7 12h14" stroke="currentColor" strokeWidth="2" fill="none" />
@@ -145,26 +133,16 @@ export default function ControlBar() {
         后退
       </button>
 
-      {/* 前进一步（主按钮） */}
-      <button
-        onClick={() => step('step_over')}
-        disabled={!canStep}
-        style={主按钮样式}
-        title="前进一步（Step Over）"
-      >
+      {/* Step (primary) */}
+      <button onClick={() => step('step_over')} disabled={!canStep} style={primaryBtn} title="前进一步 (Step Over)">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
           <path d="M4 2l16 10L4 22V2z" />
         </svg>
         步进
       </button>
 
-      {/* 步入 */}
-      <button
-        onClick={() => step('step_into')}
-        disabled={!canStep}
-        style={次要按钮样式}
-        title="步入函数"
-      >
+      {/* Step Into */}
+      <button onClick={() => step('step_into')} disabled={!canStep} style={secondaryBtn} title="步入函数">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M12 3v12" />
           <path d="M8 11l4 4 4-4" />
@@ -173,13 +151,8 @@ export default function ControlBar() {
         步入
       </button>
 
-      {/* 步出 */}
-      <button
-        onClick={() => step('step_out')}
-        disabled={!canStep}
-        style={次要按钮样式}
-        title="跳出函数"
-      >
+      {/* Step Out */}
+      <button onClick={() => step('step_out')} disabled={!canStep} style={secondaryBtn} title="跳出函数">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M12 21V9" />
           <path d="M8 13l4-4 4 4" />
@@ -188,13 +161,8 @@ export default function ControlBar() {
         跳出
       </button>
 
-      {/* 前进（重做） */}
-      <button
-        onClick={forward}
-        disabled={!canStep}
-        style={次要按钮样式}
-        title="前进（重做）"
-      >
+      {/* Forward (redo) */}
+      <button onClick={forward} disabled={!canStep} style={secondaryBtn} title="前进（重做）">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
           <path d="M17 6l6 6-6 6V6z" />
           <path d="M17 12H3" stroke="currentColor" strokeWidth="2" fill="none" />
@@ -202,15 +170,10 @@ export default function ControlBar() {
         前进
       </button>
 
-      <div style={{ width: 1, height: 20, background: '#e8e8e8', margin: '0 4px' }} />
+      <div style={{ width: 1, height: 20, background: 'var(--color-border)', margin: '0 4px' }} />
 
-      {/* 运行到断点 */}
-      <button
-        onClick={runTo}
-        disabled={!canStep}
-        style={次要按钮样式}
-        title="运行到断点"
-      >
+      {/* Run to breakpoint */}
+      <button onClick={runTo} disabled={!canStep} style={secondaryBtn} title="运行到断点">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
           <path d="M4 2l16 10L4 22V2z" />
           <rect x="20" y="2" width="2" height="20" rx="1" fill="currentColor" />
@@ -226,15 +189,14 @@ export default function ControlBar() {
           <button
             ref={histBtnRef}
             onClick={() => setHistOpen((v) => !v)}
-            title="执行历史（点击查看所有步骤）"
+            title="执行历史"
             style={{
-              ...按钮样式,
+              ...baseBtn,
               gap: 6,
               fontSize: 11,
-              fontFamily: 'SF Mono, Menlo, Monaco, monospace',
-              background: histOpen ? '#e8f0fe' : '#fafafa',
-              border: histOpen ? '1px solid #1a73e8' : '1px solid #e0e0e0',
-              color: histOpen ? '#1a73e8' : '#666',
+              fontFamily: 'var(--font-mono)',
+              background: histOpen ? 'var(--color-ink-light)' : 'transparent',
+              color: histOpen ? 'var(--color-ink)' : 'var(--color-text-secondary)',
             }}
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -245,21 +207,19 @@ export default function ControlBar() {
             <span style={{ fontSize: 9, opacity: 0.5 }}>{histOpen ? '▴' : '▾'}</span>
           </button>
 
-          {/* Popover — opens upward */}
           {histOpen && (
             <div ref={histPanelRef} style={{
               position: 'fixed',
-              bottom: 48,
+              bottom: 44,
               right: 12,
               zIndex: 1000,
             }}>
               <div style={{
                 width: 340,
                 maxHeight: 360,
-                background: '#fff',
-                borderRadius: 8,
-                boxShadow: '0 -4px 24px rgba(0,0,0,0.12), 0 -1px 4px rgba(0,0,0,0.06)',
-                border: '1px solid #e8e8e8',
+                background: 'var(--color-surface)',
+                borderRadius: 'var(--radius-lg)',
+                boxShadow: 'var(--shadow-popover)',
                 display: 'flex',
                 flexDirection: 'column',
                 overflow: 'hidden',
@@ -267,15 +227,26 @@ export default function ControlBar() {
                 {/* Header */}
                 <div style={{
                   padding: '8px 12px',
-                  borderBottom: '1px solid #f0f0f0',
+                  borderBottom: 'var(--border-hairline)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
                 }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: '#666' }}>
-                    📋 执行历史
+                  <span style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    fontFamily: 'var(--font-ui)',
+                    color: 'var(--color-text-secondary)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
+                  }}>
+                    执行历史
                   </span>
-                  <span style={{ fontSize: 10, color: '#aaa' }}>
+                  <span style={{
+                    fontSize: 10,
+                    fontFamily: 'var(--font-mono)',
+                    color: 'var(--color-text-tertiary)',
+                  }}>
                     {totalSteps} 步
                   </span>
                 </div>
@@ -287,7 +258,12 @@ export default function ControlBar() {
                   padding: '4px 0',
                 }}>
                   {stepItems.length === 0 ? (
-                    <div style={{ padding: 24, textAlign: 'center', fontSize: 12, color: '#ccc' }}>
+                    <div style={{
+                      padding: 24,
+                      textAlign: 'center',
+                      fontSize: 12,
+                      color: 'var(--color-text-tertiary)',
+                    }}>
                       暂无步骤
                     </div>
                   ) : (
@@ -308,16 +284,16 @@ export default function ControlBar() {
                             gap: 8,
                             padding: '5px 12px',
                             cursor: 'pointer',
-                            fontSize: 12,
-                            fontFamily: 'SF Mono, Menlo, Monaco, monospace',
-                            background: isActive ? '#e8f0fe' : 'transparent',
-                            borderLeft: isActive ? '2px solid #1a73e8' : '2px solid transparent',
-                            color: isActive ? '#1a73e8' : '#555',
-                            fontWeight: isActive ? 600 : 400,
+                            fontSize: 11,
+                            fontFamily: 'var(--font-mono)',
+                            background: isActive ? 'var(--color-ink-light)' : 'transparent',
+                            borderLeft: isActive ? '2px solid var(--color-ink)' : '2px solid transparent',
+                            color: isActive ? 'var(--color-ink)' : 'var(--color-text-secondary)',
+                            fontWeight: isActive ? 500 : 400,
                             transition: 'background 0.1s',
                           }}
                           onMouseEnter={(e) => {
-                            if (!isActive) e.currentTarget.style.background = '#fafafa';
+                            if (!isActive) e.currentTarget.style.background = 'var(--color-surface-alt)';
                           }}
                           onMouseLeave={(e) => {
                             if (!isActive) e.currentTarget.style.background = 'transparent';
@@ -345,12 +321,11 @@ export default function ControlBar() {
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
                             whiteSpace: 'nowrap',
-                            fontSize: 11,
                           }}>
                             {item.summary}
                           </span>
                           {isActive && (
-                            <span style={{ fontSize: 10, flexShrink: 0 }}>◀</span>
+                            <span style={{ fontSize: 10, flexShrink: 0 }}>{'◀'}</span>
                           )}
                         </div>
                       );

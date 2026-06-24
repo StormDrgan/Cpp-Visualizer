@@ -1,35 +1,82 @@
+@import './design-tokens.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* 全局样式 */
+/* ═══════════════════════════════════════════════════════════════════════════
+   Global Styles — "Graph Paper" theme
+   ═══════════════════════════════════════════════════════════════════════════ */
+
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
+}
+
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
-    'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial,
-    sans-serif;
-  background: #f5f5f5;
-  color: #333;
+  font-family: var(--font-ui);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  background: var(--color-page);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* 当前执行行高亮 */
+/* ── Monaco Editor Decorations ─────────────────────────────────────────── */
+
+/* Current execution line */
 .monaco-editor .current-line-decoration {
-  background: rgba(76, 175, 80, 0.12) !important;
-  border-left: 3px solid #4caf50 !important;
+  background: var(--color-ink-light) !important;
+  border-left: 3px solid var(--color-ink) !important;
 }
 
-/* 错误行标记 */
+/* Error line */
 .monaco-editor .error-line-decoration {
-  background: rgba(244, 67, 54, 0.15) !important;
+  background: var(--color-red-light) !important;
 }
 
-/* 断点标记样式 */
+/* Breakpoint glyph */
 .monaco-editor .breakpoint-glyph {
-  background: #e53935;
+  background: var(--color-red);
   border-radius: 50%;
+}
+
+/* ── Focus Styles ──────────────────────────────────────────────────────── */
+
+:focus-visible {
+  outline: var(--border-focus);
+  outline-offset: 2px;
+}
+
+/* ── Scrollbar ─────────────────────────────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-tertiary);
+}
+
+/* ── Utility ───────────────────────────────────────────────────────────── */
+
+.mono {
+  font-family: var(--font-mono);
 }

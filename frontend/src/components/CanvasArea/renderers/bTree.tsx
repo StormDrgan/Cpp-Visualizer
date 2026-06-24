@@ -1,7 +1,20 @@
 import { Fragment } from 'react';
 import { Rect, Text, Arrow, Group } from 'react-konva';
 import type { HeapStructure } from '../../../types';
-import { BTREE_KEY_W, BTREE_KEY_H, BTREE_KEY_GAP, BTREE_NODE_PAD, BTREE_LAYER_GAP } from '../constants';
+import {
+  BTREE_KEY_W,
+  BTREE_KEY_H,
+  BTREE_KEY_GAP,
+  BTREE_NODE_PAD,
+  BTREE_LAYER_GAP,
+  BTREE_STROKE,
+  BPLUSTREE_STROKE,
+  CANVAS_TEXT_FILL,
+  CANVAS_TEXT_TERTIARY,
+  CANVAS_FONT,
+  EMPTY_FILL,
+  EMPTY_STROKE,
+} from '../constants';
 import { getBTreeLayout } from '../layouts/bTree';
 
 export function renderBTree(
@@ -12,8 +25,8 @@ export function renderBTree(
   if (!result) {
     return (
       <Group key={`${struct.annotation_name}-empty`} x={canvasSize.w / 2 - 40} y={canvasSize.h / 2 - 20}>
-        <Rect width={80} height={40} cornerRadius={4} fill="#f5f5f5" stroke="#ccc" strokeWidth={1} />
-        <Text text="EMPTY" x={0} y={0} width={80} height={40} align="center" verticalAlign="middle" fontSize={12} fill="#999" fontStyle="bold" />
+        <Rect width={80} height={40} cornerRadius={4} fill={EMPTY_FILL} stroke={EMPTY_STROKE} strokeWidth={1} dash={[4, 3]} />
+        <Text text="EMPTY" x={0} y={0} width={80} height={40} align="center" verticalAlign="middle" fontSize={11} fill={CANVAS_TEXT_TERTIARY} fontStyle="bold" fontFamily={CANVAS_FONT} />
       </Group>
     );
   }
@@ -39,7 +52,7 @@ export function renderBTree(
         key={`bt-arrow-${edge.from_idx}-${edge.to_idx}`}
         points={[arrowFromX, arrowFromY, childLayout.x + childLayout.width / 2, childLayout.y]}
         pointerLength={6} pointerWidth={6}
-        fill="#8d6e63" stroke="#8d6e63" strokeWidth={1.5}
+        fill={BTREE_STROKE} stroke={BTREE_STROKE} strokeWidth={1.5}
       />
     );
   }
@@ -58,8 +71,6 @@ export function renderBTree(
           fill={hasPointers ? '#efebe9' : '#fafafa'}
           stroke={hasPointers ? '#6d4c41' : '#d0d0d0'}
           strokeWidth={hasPointers ? 2 : 1}
-          shadowColor={hasPointers ? 'rgba(109,76,65,0.15)' : 'transparent'}
-          shadowBlur={6}
         />
         {layout.keys.map((key, ki) => {
           const kx = layout.x + BTREE_NODE_PAD + ki * (BTREE_KEY_W + BTREE_KEY_GAP);
@@ -70,8 +81,8 @@ export function renderBTree(
                 x={kx} y={ky}
                 width={BTREE_KEY_W} height={BTREE_KEY_H}
                 cornerRadius={3}
-                fill={hasPointers ? '#d7ccc8' : '#f5f5f5'}
-                stroke={hasPointers ? '#8d6e63' : '#e0e0e0'}
+                fill="#f5f3f0"
+                stroke="#d7ccc8"
                 strokeWidth={1}
               />
               <Text
@@ -79,7 +90,8 @@ export function renderBTree(
                 x={kx} y={ky}
                 width={BTREE_KEY_W} height={BTREE_KEY_H}
                 align="center" verticalAlign="middle"
-                fontSize={12} fontStyle="bold" fill="#333"
+                fontSize={12} fontStyle="bold" fill={CANVAS_TEXT_FILL}
+                fontFamily={CANVAS_FONT}
               />
             </Group>
           );
@@ -100,8 +112,8 @@ export function renderBPlusTree(
   if (!result) {
     return (
       <Group key={`${struct.annotation_name}-empty`} x={canvasSize.w / 2 - 40} y={canvasSize.h / 2 - 20}>
-        <Rect width={80} height={40} cornerRadius={4} fill="#f5f5f5" stroke="#ccc" strokeWidth={1} />
-        <Text text="EMPTY" x={0} y={0} width={80} height={40} align="center" verticalAlign="middle" fontSize={12} fill="#999" fontStyle="bold" />
+        <Rect width={80} height={40} cornerRadius={4} fill={EMPTY_FILL} stroke={EMPTY_STROKE} strokeWidth={1} dash={[4, 3]} />
+        <Text text="EMPTY" x={0} y={0} width={80} height={40} align="center" verticalAlign="middle" fontSize={11} fill={CANVAS_TEXT_TERTIARY} fontStyle="bold" fontFamily={CANVAS_FONT} />
       </Group>
     );
   }
@@ -126,7 +138,7 @@ export function renderBPlusTree(
         key={`bpt-arrow-${edge.from_idx}-${edge.to_idx}`}
         points={[arrowFromX, arrowFromY, childLayout.x + childLayout.width / 2, childLayout.y]}
         pointerLength={6} pointerWidth={6}
-        fill="#689f38" stroke="#689f38" strokeWidth={1.5}
+        fill={BPLUSTREE_STROKE} stroke={BPLUSTREE_STROKE} strokeWidth={1.5}
       />
     );
   }
@@ -165,8 +177,6 @@ export function renderBPlusTree(
           fill={hasPointers ? '#f1f8e9' : '#fafafa'}
           stroke={hasPointers ? '#558b2f' : '#d0d0d0'}
           strokeWidth={hasPointers ? 2 : 1}
-          shadowColor={hasPointers ? 'rgba(85,139,47,0.15)' : 'transparent'}
-          shadowBlur={6}
         />
         {layout.keys.map((key, ki) => {
           const kx = layout.x + BTREE_NODE_PAD + ki * (BTREE_KEY_W + BTREE_KEY_GAP);
@@ -177,8 +187,8 @@ export function renderBPlusTree(
                 x={kx} y={ky}
                 width={BTREE_KEY_W} height={BTREE_KEY_H}
                 cornerRadius={3}
-                fill={hasPointers ? '#dcedc8' : '#f5f5f5'}
-                stroke={hasPointers ? '#aed581' : '#e0e0e0'}
+                fill="#f1f8e9"
+                stroke="#aed581"
                 strokeWidth={1}
               />
               <Text
@@ -186,7 +196,8 @@ export function renderBPlusTree(
                 x={kx} y={ky}
                 width={BTREE_KEY_W} height={BTREE_KEY_H}
                 align="center" verticalAlign="middle"
-                fontSize={12} fontStyle="bold" fill="#333"
+                fontSize={12} fontStyle="bold" fill={CANVAS_TEXT_FILL}
+                fontFamily={CANVAS_FONT}
               />
             </Group>
           );
@@ -197,4 +208,3 @@ export function renderBPlusTree(
 
   return <Group key={struct.annotation_name}>{elements}</Group>;
 }
-

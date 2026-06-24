@@ -36,7 +36,7 @@ export default function CodeEditor() {
 
     const decs: unknown[] = [];
 
-    // 当前执行行 — 绿色高亮
+    // Current execution line
     if (currentLine != null && status !== 'idle' && status !== 'ready') {
       decs.push({
         range: new monaco.Range(currentLine, 1, currentLine, 1),
@@ -47,7 +47,7 @@ export default function CodeEditor() {
       });
     }
 
-    // 编译错误标记
+    // Compile errors
     for (const err of compileErrors) {
       if (err.line != null) {
         decs.push({
@@ -61,7 +61,7 @@ export default function CodeEditor() {
       }
     }
 
-    // 断点标记
+    // Breakpoints
     for (const bp of breakpoints) {
       decs.push({
         range: new monaco.Range(bp, 1, bp, 1),
@@ -79,7 +79,40 @@ export default function CodeEditor() {
     editorRef.current = editor;
     monacoRef.current = monaco;
 
-    // ---- LEFT CLICK on gutter → breakpoint (plain) or @viz (modifier) ----
+    // ---- Define custom light theme ----
+    monaco.editor.defineTheme('cppviz-light', {
+      base: 'vs',
+      inherit: true,
+      rules: [
+        { token: 'comment', foreground: '9c9b95', fontStyle: 'italic' },
+        { token: 'keyword', foreground: '1e4d7b', fontStyle: 'bold' },
+        { token: 'string', foreground: '2d8a7b' },
+        { token: 'number', foreground: 'b8703d' },
+        { token: 'type', foreground: '1e4d7b' },
+        { token: 'identifier', foreground: '1c1c1c' },
+        { token: 'delimiter', foreground: '6b6b65' },
+        { token: 'annotation', foreground: '9c9b95', fontStyle: 'italic' },
+      ],
+      colors: {
+        'editor.background': '#ffffff',
+        'editor.foreground': '#1c1c1c',
+        'editor.lineHighlightBackground': '#fafaf7',
+        'editor.selectionBackground': '#eaf1f7',
+        'editor.inactiveSelectionBackground': '#f5f4f0',
+        'editorLineNumber.foreground': '#c5c2ba',
+        'editorLineNumber.activeForeground': '#6b6b65',
+        'editorCursor.foreground': '#1e4d7b',
+        'editorBracketMatch.background': '#f5f4f0',
+        'editorBracketMatch.border': '#e4e1da',
+        'editorGutter.background': '#fafaf7',
+        'editorWidget.background': '#ffffff',
+        'editorWidget.border': '#e4e1da',
+      },
+    });
+
+    monaco.editor.setTheme('cppviz-light');
+
+    // ---- Gutter interactions ----
     editor.onMouseDown((e: { target: { type: unknown; position?: { lineNumber: number } }; event: MouseEvent }) => {
       const ev = e.event as MouseEvent;
       const line = e.target.position?.lineNumber;
@@ -88,36 +121,32 @@ export default function CodeEditor() {
       const isGutter = e.target.type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN
                     || e.target.type === monaco.editor.MouseTargetType.GUTTER_LINE_NUMBERS;
 
-      // Ctrl/Cmd/Alt + left-click on gutter → @viz (alternate shortcut)
+      // Ctrl/Cmd/Alt + left-click on gutter → @viz popup
       if (isGutter && (ev.ctrlKey || ev.metaKey || ev.altKey)) {
         openVizPopup(line, ev.clientX, ev.clientY);
         return;
       }
 
-      // Plain left-click on glyph margin → toggle breakpoint
+      // Left-click on glyph margin → toggle breakpoint
       if (e.target.type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) {
         toggleBreakpoint(line);
       }
     });
 
-    // ---- RIGHT CLICK on gutter → @viz (primary method) ----
-    // Use DOM-level contextmenu listener instead of Monaco's onContextMenu,
-    // because Monaco's onContextMenu may not reliably report gutter targets.
+    // ---- Right-click on gutter → @viz popup ----
     const editorDom = editor.getDomNode();
     if (editorDom) {
       editorDom.addEventListener('contextmenu', (ev: MouseEvent) => {
         const target = ev.target as HTMLElement;
-        // Check if click is on a gutter element
         const inGutter = target.closest('.glyph-margin')
                       || target.closest('.margin-view-overlays')
                       || target.closest('.line-numbers')
                       || target.closest('.margin');
-        if (!inGutter) return; // not gutter — let Monaco handle it
+        if (!inGutter) return;
 
         ev.preventDefault();
         ev.stopPropagation();
 
-        // Use coordinate-based target lookup for reliable line number
         const pos = editor.getTargetAtClientPoint(ev.clientX, ev.clientY);
         const ln = pos?.position?.lineNumber ?? null;
         if (ln) {
@@ -128,17 +157,14 @@ export default function CodeEditor() {
 
     updateDecorations();
 
-    // Track cursor line for @viz annotation insertion from panel
     editor.onDidChangeCursorPosition((e: { position: { lineNumber: number } }) => {
       setCursorLine(e.position.lineNumber);
     });
   };
 
-  /** Open the @viz type-selection popup near the click position */
   const openVizPopup = (line: number, clientX: number, clientY: number) => {
     if (!containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
-    // Ensure popup stays within the container
     const left = Math.min(clientX - rect.left, rect.width - 320);
     const top = Math.min(clientY - rect.top, rect.height - 400);
     setVizPopup({
@@ -149,13 +175,11 @@ export default function CodeEditor() {
     });
   };
 
-  /** Handle selecting a structure type from the popup */
   const handleVizTypeSelect = (typeKey: string) => {
     if (!vizPopup) return;
     const def = STRUCT_TYPES.find((d) => d.type === typeKey);
     if (!def) return;
 
-    // Try to auto-detect variables from the target line
     const editor = editorRef.current;
     const targetLine = vizPopup.targetLine;
     let detectedVars: string[] = [];
@@ -164,7 +188,6 @@ export default function CodeEditor() {
       detectedVars = detectVariables(lineText);
     }
 
-    // Auto-fill fields based on detected variables and type
     const fields: Record<string, string> = { name: 'auto' };
     for (const field of def.fields) {
       if (field.key === 'root_var' && detectedVars.length > 0) {
@@ -178,8 +201,6 @@ export default function CodeEditor() {
       }
     }
 
-    // Generate annotation and insert above the target line
-    // Strip the "// " prefix if format returns it
     const annotation = def.format(fields.name ?? 'auto', fields);
     const newCode = insertAnnotationAbove(code, targetLine, annotation);
     setCode(newCode);
@@ -190,16 +211,13 @@ export default function CodeEditor() {
     updateDecorations();
   }, [updateDecorations]);
 
-  // Close @viz popup when clicking outside
   useEffect(() => {
     if (!vizPopup) return;
     const onMouseDown = (e: MouseEvent) => {
-      // Don't close if clicking inside the popup itself
       const popupEl = document.querySelector('.viz-popup-overlay');
       if (popupEl && popupEl.contains(e.target as Node)) return;
       setVizPopup(null);
     };
-    // Use mousedown (not click) so it fires before Monaco handlers
     document.addEventListener('mousedown', onMouseDown);
     return () => document.removeEventListener('mousedown', onMouseDown);
   }, [vizPopup]);
@@ -219,44 +237,50 @@ export default function CodeEditor() {
 
   return (
     <div ref={containerRef} style={{ height: '100%', display: 'flex', flexDirection: 'column', position: 'relative' }} onKeyDown={handleKeyDown}>
-      {/* 工具栏 */}
+      {/* Toolbar */}
       <div
         style={{
-          height: 36,
-          background: '#fafafa',
-          borderBottom: '1px solid #e8e8e8',
+          height: 32,
+          background: 'var(--color-surface-alt)',
+          borderBottom: 'var(--border-hairline)',
           display: 'flex',
           alignItems: 'center',
-          padding: '0 12px',
+          padding: '0 10px',
           gap: 8,
           flexShrink: 0,
         }}
       >
-        {/* 文件标签 */}
+        {/* File tab */}
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: 6,
-            background: '#fff',
-            border: '1px solid #e0e0e0',
-            borderBottom: '1px solid #fff',
-            borderRadius: '4px 4px 0 0',
-            padding: '3px 12px',
+            background: 'var(--color-surface)',
+            border: 'var(--border-hairline)',
+            borderBottom: '1px solid var(--color-surface)',
+            borderRadius: 'var(--radius-md) var(--radius-md) 0 0',
+            padding: '2px 12px',
             marginTop: 4,
-            height: 30,
+            height: 28,
           }}
         >
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="#1a73e8">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="var(--color-ink)">
             <path d="M4 1h6l4 4v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1z" />
             <text x="5" y="13" fontSize="9" fill="white" fontWeight="bold" fontFamily="monospace">C</text>
           </svg>
-          <span style={{ fontSize: 12, color: '#333', fontWeight: 500 }}>main.cpp</span>
+          <span style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 12, fontWeight: 500,
+            color: 'var(--color-text)',
+          }}>
+            main.cpp
+          </span>
         </div>
 
         <div style={{ flex: 1 }} />
 
-        {/* 运行按钮 */}
+        {/* Run button */}
         <button
           onClick={() => {
             const currentCode = editorRef.current?.getValue() ?? code;
@@ -266,13 +290,14 @@ export default function CodeEditor() {
             display: 'flex',
             alignItems: 'center',
             gap: 4,
-            padding: '4px 14px',
+            padding: '3px 12px',
             fontSize: 12,
             fontWeight: 500,
-            color: '#fff',
-            background: isIdle ? '#1a73e8' : '#4caf50',
+            fontFamily: 'var(--font-ui)',
+            color: '#ffffff',
+            background: isIdle ? 'var(--color-ink)' : 'var(--color-teal)',
             border: 'none',
-            borderRadius: 4,
+            borderRadius: 'var(--radius-md)',
             cursor: 'pointer',
             transition: 'opacity 0.15s',
           }}
@@ -286,18 +311,19 @@ export default function CodeEditor() {
         </button>
       </div>
 
-      {/* Monaco 编辑器 */}
+      {/* Monaco editor */}
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
         <Editor
           height="100%"
           defaultLanguage="cpp"
-          theme="vs"
+          theme="cppviz-light"
           value={code}
           onChange={(val) => setCode(val ?? '')}
           onMount={handleEditorMount}
           options={{
             fontSize: 13,
             lineHeight: 22,
+            fontFamily: "'JetBrains Mono', 'SF Mono', Menlo, Monaco, monospace",
             lineNumbers: 'on',
             glyphMargin: true,
             minimap: { enabled: false },
@@ -314,17 +340,16 @@ export default function CodeEditor() {
           }}
         />
 
-        {/* @viz annotation popup — type selector */}
+        {/* @viz popup */}
         {vizPopup && vizPopup.visible && (
           <div className="viz-popup-overlay" style={{
             position: 'absolute',
             top: vizPopup.top,
             left: vizPopup.left,
             zIndex: 100,
-            background: '#fff',
-            borderRadius: 8,
-            boxShadow: '0 6px 24px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.08)',
-            border: '1px solid #e0e0e0',
+            background: 'var(--color-surface)',
+            borderRadius: 'var(--radius-lg)',
+            boxShadow: 'var(--shadow-popover)',
             width: 300,
             padding: '10px 12px 12px',
           }}>
@@ -334,23 +359,29 @@ export default function CodeEditor() {
               justifyContent: 'space-between',
               marginBottom: 8,
             }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: '#555' }}>
-                🏷️ 在第 {vizPopup.targetLine} 行上方添加标注
+              <span style={{
+                fontSize: 12, fontWeight: 600,
+                fontFamily: 'var(--font-ui)',
+                color: 'var(--color-text-secondary)',
+              }}>
+                在第 {vizPopup.targetLine} 行上方添加标注
               </span>
               <button
                 onClick={() => setVizPopup(null)}
                 style={{
                   background: 'none', border: 'none', cursor: 'pointer',
-                  fontSize: 14, color: '#bbb', padding: 0, lineHeight: 1,
+                  fontSize: 14, color: 'var(--color-text-tertiary)',
+                  padding: 0, lineHeight: 1,
                 }}
               >
                 ×
               </button>
             </div>
             <div style={{
-              fontSize: 10, color: '#999', marginBottom: 8,
+              fontSize: 10, fontFamily: 'var(--font-mono)',
+              color: 'var(--color-text-tertiary)', marginBottom: 8,
             }}>
-              右键点击行号区域添加标注 | Ctrl/Cmd/Alt+左键也可触发
+              右键行号区域 · Ctrl+左键也可触发
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4 }}>
               {STRUCT_TYPES.map((def) => (
@@ -359,27 +390,23 @@ export default function CodeEditor() {
                   onClick={() => handleVizTypeSelect(def.type)}
                   title={def.label}
                   style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 4,
-                    padding: '5px 6px',
-                    fontSize: 11,
-                    fontFamily: 'inherit',
-                    color: '#444',
-                    background: '#fafafa',
-                    border: '1px solid #f0f0f0',
-                    borderRadius: 4,
-                    cursor: 'pointer',
-                    textAlign: 'left',
+                    display: 'flex', alignItems: 'center', gap: 4,
+                    padding: '5px 6px', fontSize: 11,
+                    fontFamily: 'var(--font-ui)', fontWeight: 500,
+                    color: 'var(--color-text)',
+                    background: 'var(--color-surface-alt)',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 'var(--radius-md)',
+                    cursor: 'pointer', textAlign: 'left',
                     transition: 'all 0.1s',
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.background = '#f0f7ff';
-                    e.currentTarget.style.borderColor = '#1a73e8';
+                    e.currentTarget.style.background = 'var(--color-ink-light)';
+                    e.currentTarget.style.borderColor = 'var(--color-ink)';
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.background = '#fafafa';
-                    e.currentTarget.style.borderColor = '#f0f0f0';
+                    e.currentTarget.style.background = 'var(--color-surface-alt)';
+                    e.currentTarget.style.borderColor = 'var(--color-border)';
                   }}
                 >
                   <span style={{ fontSize: 13 }}>{def.icon}</span>
@@ -391,14 +418,14 @@ export default function CodeEditor() {
         )}
       </div>
 
-      {/* 编译错误面板 */}
+      {/* Compile error panel */}
       {compileErrors.length > 0 && (
         <div
           style={{
             maxHeight: 120,
             overflowY: 'auto',
-            borderTop: '2px solid #ef5350',
-            background: '#fff5f5',
+            borderTop: '2px solid var(--color-red)',
+            background: 'var(--color-red-light)',
             flexShrink: 0,
           }}
         >
@@ -406,27 +433,28 @@ export default function CodeEditor() {
             style={{
               fontSize: 11,
               fontWeight: 600,
-              color: '#c62828',
+              fontFamily: 'var(--font-ui)',
+              color: 'var(--color-red)',
               padding: '6px 12px',
-              background: '#ffebee',
-              borderBottom: '1px solid #ffcdd2',
+              background: 'var(--color-red-light)',
+              borderBottom: '1px solid rgba(196, 49, 43, 0.2)',
             }}
           >
-            ⚠ 编译错误 ({compileErrors.length})
+            编译错误 ({compileErrors.length})
           </div>
           {compileErrors.map((err, i) => (
             <div
               key={i}
               style={{
-                fontSize: 12,
-                fontFamily: 'SF Mono, Menlo, Monaco, monospace',
-                color: '#c62828',
+                fontSize: 11,
+                fontFamily: 'var(--font-mono)',
+                color: 'var(--color-red)',
                 padding: '4px 12px',
-                borderBottom: '1px solid #ffcdd2',
+                borderBottom: '1px solid rgba(196, 49, 43, 0.12)',
               }}
             >
               {err.line != null && (
-                <span style={{ color: '#888', marginRight: 6 }}>
+                <span style={{ color: 'var(--color-text-secondary)', marginRight: 6 }}>
                   第 {err.line} 行
                 </span>
               )}

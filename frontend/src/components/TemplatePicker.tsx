@@ -39,7 +39,6 @@ const CATEGORIES: Category[] = [
   },
 ];
 
-// Build a quick lookup map
 const TEMPLATE_MAP: Record<string, Template> = {};
 TEMPLATES.forEach((t) => (TEMPLATE_MAP[t.id] = t));
 
@@ -51,7 +50,6 @@ export default function TemplatePicker() {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  // Compute panel position relative to trigger
   const [panelStyle, setPanelStyle] = useState<React.CSSProperties>({});
   const recalcPosition = () => {
     if (!triggerRef.current) return;
@@ -72,7 +70,6 @@ export default function TemplatePicker() {
     return () => window.removeEventListener('resize', recalcPosition);
   }, [open]);
 
-  // Close on outside click
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
@@ -93,7 +90,6 @@ export default function TemplatePicker() {
     };
   }, [open]);
 
-  // Filter templates by search
   const filteredCategories = useMemo(() => {
     if (!search.trim()) return CATEGORIES;
     const q = search.toLowerCase();
@@ -127,15 +123,28 @@ export default function TemplatePicker() {
           height: 28,
           padding: '0 8px',
           fontSize: 12,
-          fontFamily: 'inherit',
-          color: '#444',
-          background: open ? '#e8f0fe' : '#fafafa',
-          border: open ? '1px solid #1a73e8' : '1px solid #e0e0e0',
-          borderRadius: 4,
+          fontFamily: 'var(--font-ui)',
+          fontWeight: 500,
+          color: open ? 'var(--color-ink)' : 'var(--color-text-secondary)',
+          background: open ? 'var(--color-ink-light)' : 'transparent',
+          border: open ? '1px solid var(--color-ink)' : '1px solid transparent',
+          borderRadius: 'var(--radius-md)',
           cursor: 'pointer',
           outline: 'none',
           whiteSpace: 'nowrap',
           transition: 'all 0.15s',
+        }}
+        onMouseEnter={(e) => {
+          if (!open) {
+            e.currentTarget.style.background = 'var(--color-surface-alt)';
+            e.currentTarget.style.borderColor = 'var(--color-border)';
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (!open) {
+            e.currentTarget.style.background = 'transparent';
+            e.currentTarget.style.borderColor = 'transparent';
+          }
         }}
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -154,10 +163,9 @@ export default function TemplatePicker() {
           <div style={{
             width: 520,
             maxHeight: 420,
-            background: '#fff',
-            borderRadius: 8,
-            boxShadow: '0 8px 32px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.08)',
-            border: '1px solid #e8e8e8',
+            background: 'var(--color-surface)',
+            borderRadius: 'var(--radius-lg)',
+            boxShadow: 'var(--shadow-popover)',
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
@@ -165,12 +173,12 @@ export default function TemplatePicker() {
             {/* Search bar */}
             <div style={{
               padding: '10px 12px',
-              borderBottom: '1px solid #f0f0f0',
+              borderBottom: 'var(--border-hairline)',
               display: 'flex',
               alignItems: 'center',
               gap: 8,
             }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#aaa" strokeWidth="2">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-tertiary)" strokeWidth="2">
                 <circle cx="11" cy="11" r="8" />
                 <path d="M21 21l-4.35-4.35" />
               </svg>
@@ -185,8 +193,8 @@ export default function TemplatePicker() {
                   border: 'none',
                   outline: 'none',
                   fontSize: 13,
-                  fontFamily: 'inherit',
-                  color: '#333',
+                  fontFamily: 'var(--font-mono)',
+                  color: 'var(--color-text)',
                   background: 'transparent',
                 }}
               />
@@ -199,7 +207,7 @@ export default function TemplatePicker() {
                     cursor: 'pointer',
                     padding: '2px 4px',
                     fontSize: 14,
-                    color: '#999',
+                    color: 'var(--color-text-tertiary)',
                     lineHeight: 1,
                   }}
                 >
@@ -218,7 +226,7 @@ export default function TemplatePicker() {
                 <div style={{
                   textAlign: 'center',
                   padding: 32,
-                  color: '#bbb',
+                  color: 'var(--color-text-tertiary)',
                   fontSize: 13,
                 }}>
                   没有匹配的模板
@@ -227,13 +235,14 @@ export default function TemplatePicker() {
                 filteredCategories.map((cat) => (
                   <div key={cat.name} style={{ marginBottom: 14 }}>
                     <div style={{
-                      fontSize: 11,
+                      fontSize: 10,
                       fontWeight: 600,
-                      color: '#999',
+                      color: 'var(--color-text-tertiary)',
                       textTransform: 'uppercase',
                       letterSpacing: '0.5px',
                       marginBottom: 6,
                       paddingLeft: 2,
+                      fontFamily: 'var(--font-ui)',
                     }}>
                       {cat.name}
                     </div>
@@ -261,11 +270,12 @@ export default function TemplatePicker() {
                               gap: 6,
                               padding: '7px 10px',
                               fontSize: 12,
-                              fontFamily: 'inherit',
-                              color: isActive ? '#1a73e8' : '#444',
-                              background: isActive ? '#e8f0fe' : '#fafafa',
-                              border: isActive ? '1px solid #1a73e8' : '1px solid #f0f0f0',
-                              borderRadius: 5,
+                              fontFamily: 'var(--font-ui)',
+                              fontWeight: 500,
+                              color: isActive ? 'var(--color-ink)' : 'var(--color-text)',
+                              background: isActive ? 'var(--color-ink-light)' : 'var(--color-surface-alt)',
+                              border: 'none',
+                              borderRadius: 'var(--radius-md)',
                               cursor: 'pointer',
                               textAlign: 'left',
                               transition: 'all 0.12s',
@@ -273,14 +283,12 @@ export default function TemplatePicker() {
                             }}
                             onMouseEnter={(e) => {
                               if (!isActive) {
-                                e.currentTarget.style.background = '#f0f0f0';
-                                e.currentTarget.style.borderColor = '#d0d0d0';
+                                e.currentTarget.style.background = 'var(--color-surface)';
                               }
                             }}
                             onMouseLeave={(e) => {
                               if (!isActive) {
-                                e.currentTarget.style.background = '#fafafa';
-                                e.currentTarget.style.borderColor = '#f0f0f0';
+                                e.currentTarget.style.background = 'var(--color-surface-alt)';
                               }
                             }}
                           >

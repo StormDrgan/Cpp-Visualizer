@@ -1,7 +1,15 @@
 import { Fragment } from 'react';
 import { Rect, Text, Group, Line } from 'react-konva';
 import type { HeapStructure } from '../../../types';
-import { ARRAY_CELL_W, ARRAY_CELL_H, ARRAY_GAP } from '../constants';
+import {
+  ARRAY_CELL_W, ARRAY_CELL_H, ARRAY_GAP,
+  NODE_FILL, NODE_STROKE, NODE_STROKE_WIDTH,
+  NODE_POINTED_FILL, NODE_POINTED_STROKE,
+  POINTER_LINE_COLOR, POINTER_TAG_FILL, POINTER_TAG_STROKE,
+  POINTER_TEXT_COLOR, POINTER_FONT_SIZE,
+  CANVAS_TEXT_FILL, CANVAS_TEXT_SECONDARY, CANVAS_TEXT_TERTIARY, CANVAS_FONT,
+  EMPTY_FILL, EMPTY_STROKE,
+} from '../constants';
 import { getArrayLayout } from '../layouts/array';
 
 export function renderArray(
@@ -12,9 +20,9 @@ export function renderArray(
   if (!layout) {
     return (
       <Group key={`${struct.annotation_name}-empty`} x={canvasSize.w / 2 - 40} y={canvasSize.h / 2 - 20}>
-        <Rect width={80} height={40} cornerRadius={4} fill="#f5f5f5" stroke="#ccc" strokeWidth={1} />
-        <Text text="EMPTY" x={0} y={0} width={80} height={40} align="center" verticalAlign="middle" fontSize={12} fill="#999" fontStyle="bold" />
-        <Text text={struct.annotation_name} x={40} y={45} fontSize={11} fill="#bbb" align="center" />
+        <Rect width={80} height={40} cornerRadius={4} fill={EMPTY_FILL} stroke={EMPTY_STROKE} strokeWidth={1} dash={[4, 3]} />
+        <Text text="EMPTY" x={0} y={0} width={80} height={40} align="center" verticalAlign="middle" fontSize={11} fontFamily={CANVAS_FONT} fontStyle="bold" fill={CANVAS_TEXT_TERTIARY} />
+        <Text text={struct.annotation_name} x={40} y={45} fontSize={10} fontFamily={CANVAS_FONT} fill={CANVAS_TEXT_TERTIARY} align="center" />
       </Group>
     );
   }
@@ -39,11 +47,9 @@ export function renderArray(
           x={x} y={y}
           width={ARRAY_CELL_W} height={ARRAY_CELL_H}
           cornerRadius={4}
-          fill={hasPointers ? '#e0f2f1' : '#fafafa'}
-          stroke={hasPointers ? '#00897b' : '#d0d0d0'}
-          strokeWidth={hasPointers ? 2 : 1}
-          shadowColor={hasPointers ? 'rgba(0,137,123,0.15)' : 'transparent'}
-          shadowBlur={6}
+          fill={hasPointers ? NODE_POINTED_FILL : NODE_FILL}
+          stroke={hasPointers ? NODE_POINTED_STROKE : NODE_STROKE}
+          strokeWidth={NODE_STROKE_WIDTH}
         />
         <Text
           name={`label-${node.addr}`}
@@ -51,7 +57,7 @@ export function renderArray(
           x={x} y={y}
           width={ARRAY_CELL_W} height={ARRAY_CELL_H}
           align="center" verticalAlign="middle"
-          fontSize={14} fontStyle="bold" fill="#333"
+          fontSize={14} fontFamily={CANVAS_FONT} fontStyle="bold" fill={CANVAS_TEXT_FILL}
         />
         {/* Index label below cell */}
         <Text
@@ -59,7 +65,7 @@ export function renderArray(
           x={x} y={y + ARRAY_CELL_H + 2}
           width={ARRAY_CELL_W} height={16}
           align="center" verticalAlign="middle"
-          fontSize={10} fill="#aaa"
+          fontSize={10} fontFamily={CANVAS_FONT} fill={CANVAS_TEXT_SECONDARY}
         />
       </Group>
     );
@@ -81,7 +87,7 @@ export function renderArray(
         <Line
           key={`ptr-line-${node.addr}-${ptr}`}
           points={[cx, cellBottom + 18, cx, labelY - 4]}
-          stroke="#e65100" strokeWidth={1} dash={[3, 3]}
+          stroke={POINTER_LINE_COLOR} strokeWidth={1} dash={[3, 3]}
         />
       );
       elements.push(
@@ -89,7 +95,7 @@ export function renderArray(
           key={`ptr-bg-${node.addr}-${ptr}`}
           x={cx - 24} y={labelY - 2}
           width={48} height={18} cornerRadius={3}
-          fill="#fff3e0" stroke="#e65100" strokeWidth={1}
+          fill={POINTER_TAG_FILL} stroke={POINTER_TAG_STROKE} strokeWidth={1}
         />
       );
       elements.push(
@@ -99,7 +105,7 @@ export function renderArray(
           x={cx - 24} y={labelY - 2}
           width={48} height={18}
           align="center" verticalAlign="middle"
-          fontSize={10} fontStyle="bold" fill="#e65100"
+          fontSize={POINTER_FONT_SIZE} fontFamily={CANVAS_FONT} fontStyle="bold" fill={POINTER_TEXT_COLOR}
         />
       );
     });
@@ -107,4 +113,3 @@ export function renderArray(
 
   return <Group key={struct.annotation_name}>{elements}</Group>;
 }
-

@@ -6,8 +6,7 @@ import CanvasArea from './components/CanvasArea';
 import VariablePanel from './components/VariablePanel';
 import ControlBar from './components/ControlBar';
 
-/** Thickness of the drag-to-resize divider bars */
-const DIVIDER = 5;
+const DIVIDER = 4;
 
 export default function App() {
   const createSession = useStore((s) => s.createSession);
@@ -52,8 +51,8 @@ export default function App() {
         const pct = ((e.clientX - rect.left) / rect.width) * 100;
         setSplitX(Math.min(75, Math.max(20, pct)));
       } else {
-        const topY = rect.top + 44;
-        const bottomY = rect.bottom - 40;
+        const topY = rect.top + 40; // header height
+        const bottomY = rect.bottom - 36; // control bar height
         const rightHeight = bottomY - topY;
         const mouseY = e.clientY - topY;
         const pct = (mouseY / rightHeight) * 100;
@@ -80,23 +79,24 @@ export default function App() {
         width: '100vw',
         height: '100vh',
         display: 'grid',
-        gridTemplateRows: '44px 1fr 40px',
+        gridTemplateRows: '40px 1fr 36px',
         gridTemplateColumns: `${splitX}% ${DIVIDER}px 1fr`,
         overflow: 'hidden',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif',
+        fontFamily: 'var(--font-ui)',
+        background: 'var(--color-page)',
       }}
     >
-      {/* 顶栏 — 跨所有列 */}
+      {/* Header — spans all columns */}
       <div style={{ gridColumn: '1 / -1', gridRow: 1 }}>
         <Header />
       </div>
 
-      {/* 左侧 — 代码编辑区 */}
+      {/* Code editor */}
       <div style={{ gridColumn: 1, gridRow: 2, overflow: 'hidden' }}>
         <CodeEditor />
       </div>
 
-      {/* 水平分隔条 — 拖拽调整代码区/可视化区宽度 */}
+      {/* Horizontal divider */}
       <div
         style={{
           gridColumn: 2,
@@ -107,23 +107,24 @@ export default function App() {
           zIndex: 10,
         }}
         onMouseDown={onDividerMouseDown('h')}
-        onMouseEnter={(e) => (e.currentTarget.style.background = '#e0e0e0')}
+        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-border)')}
         onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
       />
 
-      {/* 右侧 — 上下结构：画布(上) + 变量(下) */}
+      {/* Right side — canvas (top) + variables (bottom) */}
       <div style={{
         gridColumn: 3, gridRow: 2,
         display: 'flex', flexDirection: 'column',
         overflow: 'hidden',
-        borderLeft: '1px solid #e8e8e8',
+        borderLeft: 'var(--border-hairline)',
+        background: 'var(--color-page)',
       }}>
-        {/* 可视化画布 — 始终填满面板上方全部空间，minHeight 保证至少 splitY% */}
+        {/* Canvas */}
         <div style={{ flex: '1 1 auto', overflow: 'hidden', minHeight: `${splitY}%` }}>
           <CanvasArea />
         </div>
 
-        {/* 垂直分隔条 — 拖拽调整画布最小占比 */}
+        {/* Vertical divider */}
         <div
           style={{
             height: DIVIDER,
@@ -131,21 +132,21 @@ export default function App() {
             cursor: 'row-resize',
             background: 'transparent',
             transition: 'background 0.15s',
-            borderTop: '1px solid #e8e8e8',
+            borderTop: 'var(--border-hairline)',
             zIndex: 10,
           }}
           onMouseDown={onDividerMouseDown('v')}
-          onMouseEnter={(e) => (e.currentTarget.style.background = '#e0e0e0')}
+          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-border)')}
           onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
         />
 
-        {/* 变量面板 — 折叠后紧跟分隔条；内容过多时可滚动 */}
+        {/* Variable panel */}
         <div style={{ flex: '0 1 auto', overflow: 'hidden auto', minHeight: 0 }}>
           <VariablePanel />
         </div>
       </div>
 
-      {/* 底栏 — 跨所有列 */}
+      {/* Control bar — spans all columns */}
       <div style={{ gridColumn: '1 / -1', gridRow: 3 }}>
         <ControlBar />
       </div>

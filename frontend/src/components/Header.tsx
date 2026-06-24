@@ -2,13 +2,13 @@ import { useStore } from '../store/useStore';
 import TemplatePicker from './TemplatePicker';
 
 const 状态映射: Record<string, { 标签: string; 颜色: string }> = {
-  idle: { 标签: '空闲', 颜色: '#9e9e9e' },
-  ready: { 标签: '就绪', 颜色: '#ff9800' },
-  stepping: { 标签: '执行中…', 颜色: '#2196f3' },
-  running: { 标签: '运行中…', 颜色: '#7c4dff' },
-  rewinding: { 标签: '回退中…', 颜色: '#ff7043' },
-  paused: { 标签: '已暂停', 颜色: '#4caf50' },
-  terminated: { 标签: '已结束', 颜色: '#ef5350' },
+  idle: { 标签: '空闲', 颜色: 'var(--status-idle)' },
+  ready: { 标签: '就绪', 颜色: 'var(--status-ready)' },
+  stepping: { 标签: '执行中…', 颜色: 'var(--status-stepping)' },
+  running: { 标签: '运行中…', 颜色: 'var(--status-running)' },
+  rewinding: { 标签: '回退中…', 颜色: 'var(--status-rewinding)' },
+  paused: { 标签: '已暂停', 颜色: 'var(--status-paused)' },
+  terminated: { 标签: '已结束', 颜色: 'var(--status-terminated)' },
 };
 
 export default function Header() {
@@ -18,40 +18,47 @@ export default function Header() {
   const 会话ID = useStore((s) => s.sessionId);
 
   const info = 状态映射[状态] ?? 状态映射.idle;
+  const isActive = ['stepping', 'running', 'rewinding'].includes(状态);
 
   return (
     <header
       style={{
-        height: 44,
-        background: '#fff',
-        borderBottom: '1px solid #e0e0e0',
+        height: 40,
+        background: 'var(--color-page)',
+        borderBottom: 'var(--border-hairline)',
         display: 'flex',
         alignItems: 'center',
-        padding: '0 16px',
-        gap: 16,
+        padding: '0 12px',
+        gap: 12,
         flexShrink: 0,
       }}
     >
-      {/* Logo 区域 */}
+      {/* Logo */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-          <rect x="2" y="3" width="20" height="16" rx="2" fill="#1a73e8" />
-          <text x="6" y="15" fontSize="11" fill="white" fontWeight="bold" fontFamily="monospace">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <rect x="2" y="3" width="20" height="16" rx="2" fill="var(--color-ink)" />
+          <text x="6" y="15" fontSize="10" fill="white" fontWeight="bold" fontFamily="var(--font-mono)">
             C++
           </text>
         </svg>
-        <span style={{ fontSize: 14, fontWeight: 600, color: '#333', letterSpacing: '0.3px' }}>
+        <span style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: 14,
+          fontWeight: 500,
+          color: 'var(--color-text)',
+          letterSpacing: '0.04em',
+        }}>
           C/C++ Visualizer
         </span>
       </div>
 
-      {/* 分割线 */}
-      <div style={{ width: 1, height: 18, background: '#e0e0e0' }} />
+      {/* Divider */}
+      <div style={{ width: 1, height: 20, background: 'var(--color-border)' }} />
 
-      {/* 模板选择器 */}
+      {/* Template picker */}
       <TemplatePicker />
 
-      {/* 状态指示器 */}
+      {/* Status indicator */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <span
           style={{
@@ -59,21 +66,37 @@ export default function Header() {
             height: 8,
             borderRadius: '50%',
             background: info.颜色,
-            ...(['stepping', 'running', 'rewinding'].includes(状态)
+            flexShrink: 0,
+            ...(isActive
               ? { animation: 'pulse 1.2s ease-in-out infinite' }
               : {}),
           }}
         />
-        <span style={{ fontSize: 12, color: '#666' }}>{info.标签}</span>
+        <span style={{
+          fontFamily: 'var(--font-ui)',
+          fontSize: 12,
+          fontWeight: 500,
+          color: 'var(--color-text-secondary)',
+        }}>
+          {info.标签}
+        </span>
       </div>
 
-      {/* 当前位置 */}
+      {/* Current position */}
       {当前行 != null && (
         <>
-          <div style={{ width: 1, height: 18, background: '#e0e0e0' }} />
-          <span style={{ fontSize: 12, color: '#888' }}>
+          <div style={{ width: 1, height: 20, background: 'var(--color-border)' }} />
+          <span style={{
+            fontFamily: 'var(--font-ui)',
+            fontSize: 12,
+            color: 'var(--color-text-tertiary)',
+          }}>
             第{' '}
-            <span style={{ color: '#333', fontFamily: 'SF Mono, Menlo, Monaco, monospace', fontWeight: 500 }}>
+            <span style={{
+              fontFamily: 'var(--font-mono)',
+              fontWeight: 500,
+              color: 'var(--color-text)',
+            }}>
               {当前行}
             </span>{' '}
             行
@@ -82,9 +105,16 @@ export default function Header() {
       )}
 
       {当前函数 && (
-        <span style={{ fontSize: 12, color: '#888' }}>
+        <span style={{
+          fontFamily: 'var(--font-ui)',
+          fontSize: 12,
+          color: 'var(--color-text-tertiary)',
+        }}>
           in{' '}
-          <span style={{ color: '#1a73e8', fontFamily: 'SF Mono, Menlo, Monaco, monospace' }}>
+          <span style={{
+            fontFamily: 'var(--font-mono)',
+            color: 'var(--color-ink)',
+          }}>
             {当前函数}()
           </span>
         </span>
@@ -92,9 +122,13 @@ export default function Header() {
 
       <div style={{ flex: 1 }} />
 
-      {/* 会话 ID */}
+      {/* Session ID */}
       {会话ID && (
-        <span style={{ fontSize: 11, color: '#bbb', fontFamily: 'SF Mono, Menlo, Monaco, monospace' }}>
+        <span style={{
+          fontSize: 11,
+          color: 'var(--color-text-tertiary)',
+          fontFamily: 'var(--font-mono)',
+        }}>
           {会话ID}
         </span>
       )}

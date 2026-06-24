@@ -1,7 +1,24 @@
 import { Fragment } from 'react';
 import { Rect, Text, Arrow, Group } from 'react-konva';
 import type { HeapStructure } from '../../../types';
-import { HMAP_BUCKET_W, HMAP_BUCKET_H, HMAP_CHAIN_GAP, NODE_W, NODE_H } from '../constants';
+import {
+  HMAP_BUCKET_W,
+  HMAP_BUCKET_H,
+  HMAP_CHAIN_GAP,
+  NODE_W,
+  NODE_H,
+  NODE_FILL,
+  NODE_STROKE,
+  NODE_STROKE_WIDTH,
+  EDGE_STROKE,
+  EDGE_WIDTH,
+  HMAP_BUCKET_STROKE,
+  CANVAS_TEXT_FILL,
+  CANVAS_TEXT_TERTIARY,
+  CANVAS_FONT,
+  EMPTY_FILL,
+  EMPTY_STROKE,
+} from '../constants';
 import { nodeDisplayValue } from '../utils';
 
 export function renderHashmap(
@@ -12,9 +29,9 @@ export function renderHashmap(
   if (nodes.length === 0) {
     return (
       <Group key={`${struct.annotation_name}-empty`} x={canvasSize.w / 2 - 40} y={canvasSize.h / 2 - 20}>
-        <Rect width={80} height={40} cornerRadius={4} fill="#f5f5f5" stroke="#ccc" strokeWidth={1} />
-        <Text text="EMPTY" x={0} y={0} width={80} height={40} align="center" verticalAlign="middle" fontSize={12} fill="#999" fontStyle="bold" />
-        <Text text={struct.annotation_name} x={40} y={45} fontSize={11} fill="#bbb" align="center" />
+        <Rect width={80} height={40} cornerRadius={4} fill={EMPTY_FILL} stroke={EMPTY_STROKE} strokeWidth={1} dash={[4, 3]} />
+        <Text text="EMPTY" x={0} y={0} width={80} height={40} align="center" verticalAlign="middle" fontSize={11} fill={CANVAS_TEXT_TERTIARY} fontStyle="bold" fontFamily={CANVAS_FONT} />
+        <Text text={struct.annotation_name} x={40} y={45} fontSize={11} fill={CANVAS_TEXT_TERTIARY} align="center" fontFamily={CANVAS_FONT} />
       </Group>
     );
   }
@@ -50,15 +67,17 @@ export function renderHashmap(
       <Group key={`hmap-bucket-${node.addr}`} name={`node-${node.addr}`}>
         <Rect name={`rect-${node.addr}`}
           x={x} y={y} width={HMAP_BUCKET_W} height={HMAP_BUCKET_H}
-          cornerRadius={4} fill="#fff" stroke="#7986cb" strokeWidth={2}
+          cornerRadius={4} fill={NODE_FILL} stroke={HMAP_BUCKET_STROKE} strokeWidth={2}
         />
         <Text text={`[${idx}]`}
           x={x + 4} y={y + 2} width={36} height={16}
-          fontSize={10} fill="#7986cb" fontStyle="bold"
+          fontSize={10} fill={HMAP_BUCKET_STROKE} fontStyle="bold"
+          fontFamily={CANVAS_FONT}
         />
         <Text name={`label-${node.addr}`} text={node.label}
           x={x + 36} y={y + 2} width={HMAP_BUCKET_W - 44} height={16}
-          align="right" verticalAlign="middle" fontSize={12} fontStyle="bold" fill="#333"
+          align="right" verticalAlign="middle" fontSize={12} fontStyle="bold" fill={CANVAS_TEXT_FILL}
+          fontFamily={CANVAS_FONT}
         />
       </Group>
     );
@@ -111,12 +130,13 @@ export function renderHashmap(
       elements.push(
         <Group key={`hmap-chain-${chainNode.addr}`} name={`node-${chainNode.addr}`}>
           <Rect name={`rect-${chainNode.addr}`} x={chainNode.x} y={chainNode.y} width={NODE_W} height={NODE_H}
-            cornerRadius={6} fill="#fff" stroke="#c0c0c0" strokeWidth={1}
+            cornerRadius={6} fill={NODE_FILL} stroke={NODE_STROKE} strokeWidth={NODE_STROKE_WIDTH}
           />
           <Text name={`label-${chainNode.addr}`}
             text={nodeDisplayValue({ label: nodes.find(n => n.addr === chainNode.addr)?.label ?? '', fields: nodes.find(n => n.addr === chainNode.addr)?.fields ?? {} })}
             x={chainNode.x} y={chainNode.y} width={NODE_W} height={NODE_H}
-            align="center" verticalAlign="middle" fontSize={14} fontStyle="bold" fill="#333"
+            align="center" verticalAlign="middle" fontSize={14} fontStyle="bold" fill={CANVAS_TEXT_FILL}
+            fontFamily={CANVAS_FONT}
           />
         </Group>
       );
@@ -130,7 +150,7 @@ export function renderHashmap(
                      fromPos.cy,
                      chainNode.cx - NODE_W / 2 - 4,
                      chainNode.cy]}
-            pointerLength={8} pointerWidth={8} fill="#888" stroke="#888" strokeWidth={1.5}
+            pointerLength={8} pointerWidth={8} fill={EDGE_STROKE} stroke={EDGE_STROKE} strokeWidth={EDGE_WIDTH}
           />
         );
       }
@@ -139,4 +159,3 @@ export function renderHashmap(
 
   return <Group key={struct.annotation_name}>{elements}</Group>;
 }
-

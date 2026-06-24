@@ -1,7 +1,16 @@
 import { Fragment } from 'react';
 import { Rect, Text, Arrow, Group, Line } from 'react-konva';
 import type { HeapStructure } from '../../../types';
-import { NODE_W, NODE_H, NODE_RADIUS, STACK_CELL_W, STACK_CELL_H, STACK_GAP } from '../constants';
+import {
+  NODE_W, NODE_H, NODE_RADIUS, STACK_CELL_W, STACK_CELL_H, STACK_GAP,
+  NODE_FILL, NODE_STROKE, NODE_STROKE_WIDTH,
+  NODE_POINTED_FILL, NODE_POINTED_STROKE,
+  EDGE_STROKE, EDGE_WIDTH,
+  POINTER_LINE_COLOR, POINTER_TAG_FILL, POINTER_TAG_STROKE,
+  POINTER_TEXT_COLOR, POINTER_FONT_SIZE,
+  CANVAS_TEXT_FILL, CANVAS_TEXT_SECONDARY, CANVAS_TEXT_TERTIARY, CANVAS_FONT,
+  EMPTY_FILL, EMPTY_STROKE,
+} from '../constants';
 import { nodeDisplayValue } from '../utils';
 import { getStackLayout } from '../layouts/stack';
 
@@ -28,9 +37,9 @@ export function renderSequentialStack(
   if (!layout) {
     return (
       <Group key={`${struct.annotation_name}-empty`} x={canvasSize.w / 2 - 40} y={canvasSize.h / 2 - 20}>
-        <Rect width={80} height={40} cornerRadius={4} fill="#f5f5f5" stroke="#ccc" strokeWidth={1} />
-        <Text text="EMPTY" x={0} y={0} width={80} height={40} align="center" verticalAlign="middle" fontSize={12} fill="#999" fontStyle="bold" />
-        <Text text={struct.annotation_name} x={40} y={45} fontSize={11} fill="#bbb" align="center" />
+        <Rect width={80} height={40} cornerRadius={4} fill={EMPTY_FILL} stroke={EMPTY_STROKE} strokeWidth={1} dash={[4, 3]} />
+        <Text text="EMPTY" x={0} y={0} width={80} height={40} align="center" verticalAlign="middle" fontSize={11} fontFamily={CANVAS_FONT} fontStyle="bold" fill={CANVAS_TEXT_TERTIARY} />
+        <Text text={struct.annotation_name} x={40} y={45} fontSize={10} fontFamily={CANVAS_FONT} fill={CANVAS_TEXT_TERTIARY} align="center" />
       </Group>
     );
   }
@@ -52,11 +61,9 @@ export function renderSequentialStack(
           x={x} y={y}
           width={STACK_CELL_W} height={STACK_CELL_H}
           cornerRadius={3}
-          fill={hasPointers ? '#fff3e0' : '#fafafa'}
-          stroke={hasPointers ? '#e65100' : '#d0d0d0'}
-          strokeWidth={hasPointers ? 2 : 1}
-          shadowColor={hasPointers ? 'rgba(230,81,0,0.12)' : 'transparent'}
-          shadowBlur={4}
+          fill={hasPointers ? NODE_POINTED_FILL : NODE_FILL}
+          stroke={hasPointers ? NODE_POINTED_STROKE : NODE_STROKE}
+          strokeWidth={NODE_STROKE_WIDTH}
         />
         <Text
           name={`label-${node.addr}`}
@@ -64,14 +71,14 @@ export function renderSequentialStack(
           x={x} y={y}
           width={STACK_CELL_W} height={STACK_CELL_H}
           align="center" verticalAlign="middle"
-          fontSize={13} fontStyle="bold" fill="#333"
+          fontSize={13} fontFamily={CANVAS_FONT} fontStyle="bold" fill={CANVAS_TEXT_FILL}
         />
         <Text
           text={`[${i}]`}
           x={x + STACK_CELL_W - 32} y={y + STACK_CELL_H - 16}
           width={28} height={12}
           align="center" verticalAlign="middle"
-          fontSize={9} fill="#ccc"
+          fontSize={9} fontFamily={CANVAS_FONT} fill={CANVAS_TEXT_SECONDARY}
         />
       </Group>
     );
@@ -87,17 +94,17 @@ export function renderSequentialStack(
         <Fragment key="top-indicator">
           <Line
             points={[topPos.cx, labelY + 14, topPos.cx, topPos.y]}
-            stroke="#e65100" strokeWidth={1} dash={[3, 3]}
+            stroke={POINTER_LINE_COLOR} strokeWidth={1} dash={[3, 3]}
           />
           <Rect
             x={topPos.cx - 14} y={labelY}
             width={28} height={16} cornerRadius={3}
-            fill="#fff3e0" stroke="#e65100" strokeWidth={1}
+            fill={POINTER_TAG_FILL} stroke={POINTER_TAG_STROKE} strokeWidth={1}
           />
           <Text text="top" x={topPos.cx - 14} y={labelY}
             width={28} height={16}
             align="center" verticalAlign="middle"
-            fontSize={10} fontStyle="bold" fill="#e65100"
+            fontSize={POINTER_FONT_SIZE} fontFamily={CANVAS_FONT} fontStyle="bold" fill={POINTER_TEXT_COLOR}
           />
         </Fragment>
       );
@@ -117,9 +124,9 @@ export function renderLinkedStack(
   if (nodes.length === 0) {
     return (
       <Group key={`${struct.annotation_name}-empty`} x={canvasSize.w / 2 - 40} y={canvasSize.h / 2 - 20}>
-        <Rect width={80} height={40} cornerRadius={4} fill="#f5f5f5" stroke="#ccc" strokeWidth={1} />
-        <Text text="EMPTY" x={0} y={0} width={80} height={40} align="center" verticalAlign="middle" fontSize={12} fill="#999" fontStyle="bold" />
-        <Text text={struct.annotation_name} x={40} y={45} fontSize={11} fill="#bbb" align="center" />
+        <Rect width={80} height={40} cornerRadius={4} fill={EMPTY_FILL} stroke={EMPTY_STROKE} strokeWidth={1} dash={[4, 3]} />
+        <Text text="EMPTY" x={0} y={0} width={80} height={40} align="center" verticalAlign="middle" fontSize={11} fontFamily={CANVAS_FONT} fontStyle="bold" fill={CANVAS_TEXT_TERTIARY} />
+        <Text text={struct.annotation_name} x={40} y={45} fontSize={10} fontFamily={CANVAS_FONT} fill={CANVAS_TEXT_TERTIARY} align="center" />
       </Group>
     );
   }
@@ -151,7 +158,7 @@ export function renderLinkedStack(
           key={`arrow-${i}`}
           points={[from.cx, from.y + NODE_H + 2, to.cx, to.y - 2]}
           pointerLength={8} pointerWidth={8}
-          fill="#888" stroke="#888" strokeWidth={2}
+          fill={EDGE_STROKE} stroke={EDGE_STROKE} strokeWidth={EDGE_WIDTH}
         />
       );
     }
@@ -167,14 +174,13 @@ export function renderLinkedStack(
     elements.push(
       <Group key={`ls-node-${node.addr}`} name={`node-${node.addr}`}>
         <Rect name={`rect-${node.addr}`} x={x} y={y} width={NODE_W} height={NODE_H} cornerRadius={NODE_RADIUS}
-          fill={hasPointers ? '#fff3e0' : '#fafafa'}
-          stroke={hasPointers ? '#e65100' : '#d0d0d0'}
-          strokeWidth={hasPointers ? 2 : 1}
-          shadowColor={hasPointers ? 'rgba(230,81,0,0.15)' : 'transparent'} shadowBlur={6}
+          fill={hasPointers ? NODE_POINTED_FILL : NODE_FILL}
+          stroke={hasPointers ? NODE_POINTED_STROKE : NODE_STROKE}
+          strokeWidth={NODE_STROKE_WIDTH}
         />
         <Text name={`label-${node.addr}`} text={nodeDisplayValue(node)}
           x={x} y={y} width={NODE_W} height={NODE_H}
-          align="center" verticalAlign="middle" fontSize={14} fontStyle="bold" fill="#333"
+          align="center" verticalAlign="middle" fontSize={14} fontFamily={CANVAS_FONT} fontStyle="bold" fill={CANVAS_TEXT_FILL}
         />
       </Group>
     );
@@ -190,13 +196,13 @@ export function renderLinkedStack(
         <Fragment key="top-label">
           <Line
             points={[topPos.cx, labelY + 14, topPos.cx, topPos.y]}
-            stroke="#e65100" strokeWidth={1} dash={[3, 3]}
+            stroke={POINTER_LINE_COLOR} strokeWidth={1} dash={[3, 3]}
           />
           <Rect x={topPos.cx - 14} y={labelY} width={28} height={16} cornerRadius={3}
-            fill="#fff3e0" stroke="#e65100" strokeWidth={1}
+            fill={POINTER_TAG_FILL} stroke={POINTER_TAG_STROKE} strokeWidth={1}
           />
           <Text text="top" x={topPos.cx - 14} y={labelY} width={28} height={16}
-            align="center" verticalAlign="middle" fontSize={10} fontStyle="bold" fill="#e65100"
+            align="center" verticalAlign="middle" fontSize={POINTER_FONT_SIZE} fontFamily={CANVAS_FONT} fontStyle="bold" fill={POINTER_TEXT_COLOR}
           />
         </Fragment>
       );
@@ -205,4 +211,3 @@ export function renderLinkedStack(
 
   return <Group key={struct.annotation_name}>{elements}</Group>;
 }
-

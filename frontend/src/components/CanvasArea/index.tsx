@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState, useMemo, useCallback, type MouseEvent as ReactMouseEvent } from 'react';
-import { Stage, Layer, Group } from 'react-konva';
+import { Stage, Layer, Group, Circle } from 'react-konva';
 import Konva from 'konva';
+import { DOT_GRID_SPACING, DOT_GRID_RADIUS, DOT_GRID_COLOR } from './constants';
 import { useStore } from '../../store/useStore';
 import type { ContentBounds } from './types';
 import { mergeBounds } from './utils';
@@ -211,7 +212,7 @@ export default function CanvasArea() {
       if (!rect) return;
       const origFill = rect.fill();
       rect.to({
-        fill: '#ffa726',
+        fill: '#eaf1f7', // ink-light
         duration: 0.1,
         onFinish: () => {
           rect.to({ fill: origFill, duration: 0.2 });
@@ -236,12 +237,12 @@ export default function CanvasArea() {
 
       // Phase 1: orange flash
       rect.to({
-        fill: '#ef6c00',
+        fill: '#b8703d', // copper
         duration: 0.08,
         onFinish: () => {
           // Phase 2: gray out old value
           label.to({
-            fill: '#bbb', opacity: 0.5,
+            fill: '#9c9b95', opacity: 0.5, // text-tertiary
             duration: 0.05,
             onFinish: () => {
               // Phase 3: update text + green flash
@@ -257,10 +258,10 @@ export default function CanvasArea() {
                 label.text(addr === d.node_a ? d.val_a : d.val_b);
               }
               label.to({
-                fill: '#2e7d32', opacity: 1,
+                fill: '#2d8a7b', opacity: 1, // teal
                 duration: 0.1,
                 onFinish: () => {
-                  label.to({ fill: '#333', duration: 0.1 });
+                  label.to({ fill: '#1c1c1c', duration: 0.1 }); // text
                   rect.to({ fill: origFill, duration: 0.15 });
                 },
               });
@@ -352,7 +353,7 @@ export default function CanvasArea() {
           if (!targetRect) return;
           const origFill = targetRect.fill();
           targetRect.to({
-            fill: '#ef6c00',
+            fill: '#b8703d', // copper
             duration: 0.1,
             onFinish: () => {
               targetRect.to({ fill: origFill, duration: 0.2 });
@@ -454,16 +455,21 @@ export default function CanvasArea() {
           height: '100%',
           display: 'flex', flexDirection: 'column',
           alignItems: 'center', justifyContent: 'center',
-          background: '#f9f9fb',
+          background: 'var(--color-page)',
         }}
       >
-        <div style={{ width: 64, height: 64, borderRadius: 16, background: '#fff', border: '2px dashed #ddd', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
-          <span style={{ fontSize: 24, opacity: 0.4 }}>📐</span>
+        <div style={{ width: 64, height: 64, borderRadius: 'var(--radius-lg)', background: 'var(--color-surface)', border: '2px dashed var(--color-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-tertiary)" strokeWidth="1.5" opacity="0.5">
+            <rect x="3" y="3" width="7" height="7" rx="1" />
+            <rect x="14" y="3" width="7" height="7" rx="1" />
+            <rect x="3" y="14" width="7" height="7" rx="1" />
+            <rect x="14" y="14" width="7" height="7" rx="1" />
+          </svg>
         </div>
-        <div style={{ fontSize: 13, color: '#bbb', marginBottom: 4 }}>
+        <div style={{ fontSize: 13, fontFamily: 'var(--font-mono)', color: 'var(--color-text-tertiary)', marginBottom: 4 }}>
           可视化画布 — 编译运行代码后自动显示
         </div>
-        <div style={{ fontSize: 11, color: '#ddd', fontFamily: 'monospace' }}>
+        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--color-text-tertiary)', opacity: 0.6 }}>
           指针变量会被自动检测并可视化
         </div>
       </div>
@@ -472,14 +478,14 @@ export default function CanvasArea() {
 
   if (isTerminated && visibleStructures.length === 0) {
     return (
-      <div ref={containerRef} style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f9f9fb' }}>
+      <div ref={containerRef} style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-page)' }}>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#fce4ec', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ef5350" strokeWidth="1.5">
+          <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--color-red-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--color-red)" strokeWidth="1.5">
               <path d="M12 2v8M12 18v4M4.93 4.93l5.66 5.66M13.41 13.41l5.66 5.66M2 12h8M14 12h8M4.93 19.07l5.66-5.66M13.41 10.59l5.66-5.66" strokeWidth="1.5" />
             </svg>
           </div>
-          <div style={{ fontSize: 13, color: '#999' }}>程序已结束</div>
+          <div style={{ fontSize: 13, fontFamily: 'var(--font-mono)', color: 'var(--color-text-secondary)' }}>程序已结束</div>
         </div>
       </div>
     );
@@ -490,7 +496,7 @@ export default function CanvasArea() {
   return (
     <div
       ref={containerRef}
-      style={{ height: '100%', overflow: 'auto', background: '#f9f9fb', cursor: isDragging ? 'grabbing' : 'grab' }}
+      style={{ height: '100%', overflow: 'auto', background: 'var(--color-page)', cursor: isDragging ? 'grabbing' : 'grab' }}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
@@ -502,6 +508,11 @@ export default function CanvasArea() {
         width={stageW} height={stageH}
         scaleX={stageScale} scaleY={stageScale}
       >
+        {/* Dot grid layer — graph paper background */}
+        <Layer listening={false} opacity={stageScale < 0.5 ? Math.max(0, (stageScale - 0.25) / 0.25) : 1}>
+          <DotGrid width={stageW} height={stageH} scale={stageScale} />
+        </Layer>
+
         <Layer>
           {visibleStructures.map((struct, idx) => {
             const yOff = structLayouts[idx]?.yOffset ?? 0;
@@ -526,5 +537,33 @@ export default function CanvasArea() {
         </Layer>
       </Stage>
     </div>
+  );
+}
+
+/** Dot grid background — graph paper aesthetic */
+function DotGrid({ width, height, scale }: { width: number; height: number; scale: number }) {
+  const dots = useMemo(() => {
+    const result: Array<{ x: number; y: number }> = [];
+    // Expand beyond viewport to ensure coverage during pan
+    const margin = DOT_GRID_SPACING * 2;
+    for (let x = -margin; x < width + margin; x += DOT_GRID_SPACING) {
+      for (let y = -margin; y < height + margin; y += DOT_GRID_SPACING) {
+        result.push({ x, y });
+      }
+    }
+    return result;
+  }, [width, height]);
+
+  return (
+    <>
+      {dots.map((d, i) => (
+        <Circle
+          key={`dot-${i}`}
+          x={d.x} y={d.y}
+          radius={DOT_GRID_RADIUS}
+          fill={DOT_GRID_COLOR}
+        />
+      ))}
+    </>
   );
 }

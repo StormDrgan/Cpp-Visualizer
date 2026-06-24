@@ -1,6 +1,17 @@
 import { Fragment } from 'react';
 import { Rect, Text, Arrow, Group } from 'react-konva';
 import type { HeapStructure } from '../../../types';
+import {
+  NODE_ACTIVE_FILL,
+  NODE_ACTIVE_STROKE,
+  EDGE_STROKE,
+  EDGE_WIDTH,
+  CANVAS_TEXT_FILL,
+  CANVAS_TEXT_TERTIARY,
+  CANVAS_FONT,
+  EMPTY_FILL,
+  EMPTY_STROKE,
+} from '../constants';
 
 export function renderRecursionTree(
   struct: HeapStructure,
@@ -10,8 +21,8 @@ export function renderRecursionTree(
   if (!nodes || nodes.length === 0) {
     return (
       <Group key={`${struct.annotation_name}-empty`} x={canvasSize.w / 2 - 40} y={canvasSize.h / 2 - 20}>
-        <Rect width={80} height={40} cornerRadius={4} fill="#f5f5f5" stroke="#ccc" strokeWidth={1} />
-        <Text text="EMPTY" x={0} y={0} width={80} height={40} align="center" verticalAlign="middle" fontSize={12} fill="#999" fontStyle="bold" />
+        <Rect width={80} height={40} cornerRadius={4} fill={EMPTY_FILL} stroke={EMPTY_STROKE} strokeWidth={1} dash={[4, 3]} />
+        <Text text="EMPTY" x={0} y={0} width={80} height={40} align="center" verticalAlign="middle" fontSize={11} fill={CANVAS_TEXT_TERTIARY} fontStyle="bold" fontFamily={CANVAS_FONT} />
       </Group>
     );
   }
@@ -48,8 +59,8 @@ export function renderRecursionTree(
         <Rect name={`rect-${node.addr}`}
           width={NODE_W} height={NODE_H}
           cornerRadius={6}
-          fill={isActive ? '#e0f7fa' : '#f5f5f5'}
-          stroke={isActive ? '#00838f' : '#ccc'}
+          fill={isActive ? NODE_ACTIVE_FILL : EMPTY_FILL}
+          stroke={isActive ? NODE_ACTIVE_STROKE : EMPTY_STROKE}
           strokeWidth={isActive ? 2 : 1}
           opacity={isActive ? 1 : 0.5}
         />
@@ -58,7 +69,8 @@ export function renderRecursionTree(
           x={0} y={0} width={NODE_W} height={NODE_H}
           align="center" verticalAlign="middle"
           fontSize={12} fontStyle="bold"
-          fill={isActive ? '#333' : '#999'}
+          fill={isActive ? CANVAS_TEXT_FILL : CANVAS_TEXT_TERTIARY}
+          fontFamily={CANVAS_FONT}
         />
       </Group>
     );
@@ -89,7 +101,7 @@ export function renderRecursionTree(
             childPos.x + NODE_W / 2, childPos.y,
           ]}
           pointerLength={6} pointerWidth={6}
-          fill="#888" stroke="#888" strokeWidth={1.5}
+          fill={EDGE_STROKE} stroke={EDGE_STROKE} strokeWidth={EDGE_WIDTH}
         />
       );
     });
@@ -97,4 +109,3 @@ export function renderRecursionTree(
 
   return <Group key={struct.annotation_name}>{elements}</Group>;
 }
-

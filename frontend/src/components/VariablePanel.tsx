@@ -3,30 +3,13 @@ import { useStore } from '../store/useStore';
 import type { CandidateVar } from '../types';
 import AnnotationPanel from './AnnotationPanel';
 
-/** Shorten pointer addresses: "0x00005555555592b0 → {val=1}" → "…92b0 → {val=1}" */
 function fmtDisplay(v: { is_pointer: boolean; display_value: string; value: string }): string {
   const raw = v.display_value || v.value;
   if (!v.is_pointer) return raw;
-  // Shorten full hex address to last 4 digits for display
   return raw.replace(/0x[0-9a-fA-F]+/, (addr) => {
     if (addr.length > 8) return '…' + addr.slice(-4);
     return addr;
   });
-}
-
-/** Icon + color per struct type for the checkbox list */
-function candidateIcon(st: string): string {
-  switch (st) {
-    case 'linked_list': return '🔗';
-    case 'binary_tree': return '🌳';
-    case 'array': return '📊';
-    case 'stack': return '📚';
-    case 'queue': return '🚶';
-    case 'heap': return '⛰️';
-    case 'graph': return '🕸️';
-    case 'hashmap': return '#️⃣';
-    default: return '📦';
-  }
 }
 
 function candidateLabel(st: string): string {
@@ -43,6 +26,38 @@ function candidateLabel(st: string): string {
   }
 }
 
+// Section header style
+const sectionHeader: React.CSSProperties = {
+  height: 30,
+  display: 'flex',
+  alignItems: 'center',
+  padding: '0 12px',
+  flexShrink: 0,
+  cursor: 'pointer',
+  userSelect: 'none',
+  borderBottom: '1px solid transparent',
+  transition: 'background 0.1s',
+};
+
+const sectionLabel: React.CSSProperties = {
+  fontFamily: 'var(--font-mono)',
+  fontSize: 11,
+  fontWeight: 500,
+  color: 'var(--color-text-secondary)',
+  letterSpacing: '0.03em',
+  textTransform: 'uppercase',
+};
+
+const sectionBadge: React.CSSProperties = {
+  fontSize: 10,
+  fontFamily: 'var(--font-mono)',
+  color: 'var(--color-text-tertiary)',
+  background: 'var(--color-surface-alt)',
+  borderRadius: 'var(--radius-sm)',
+  padding: '1px 6px',
+  marginLeft: 6,
+};
+
 export default function VariablePanel() {
   const snapshot = useStore((s) => s.snapshot);
   const selectedVars = useStore((s) => s.selectedVars);
@@ -54,167 +69,173 @@ export default function VariablePanel() {
   const stdout = snapshot?.stdout ?? '';
   const candidates: CandidateVar[] = snapshot?.candidates ?? [];
 
-  // Collapse states — locals + output + targets open by default; call stack folded
   const [showLocals, setShowLocals] = useState(true);
   const [showCallStack, setShowCallStack] = useState(false);
   const [showOutput, setShowOutput] = useState(true);
   const [showTargets, setShowTargets] = useState(true);
 
+  const arrow = (open: boolean) => (
+    <span style={{
+      marginLeft: 'auto',
+      fontSize: 10,
+      color: 'var(--color-text-tertiary)',
+      transform: open ? 'rotate(180deg)' : undefined,
+      transition: 'transform 0.2s',
+    }}>
+      {'▼'}
+    </span>
+  );
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-      {/* 局部变量 */}
-      <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', flex: showLocals ? '1 1 auto' : '0 0 auto', minHeight: 0 }}>
+
+      {/* ── Local Variables ─────────────────────────────────────── */}
+      <div style={{
+        display: 'flex', flexDirection: 'column', overflow: 'hidden',
+        flex: showLocals ? '1 1 auto' : '0 0 auto', minHeight: 0,
+      }}>
         <div
           style={{
-            height: 32,
-            background: '#fafafa',
-            borderBottom: showLocals ? '1px solid #e8e8e8' : 'none',
-            display: 'flex',
-            alignItems: 'center',
-            padding: '0 12px',
-            flexShrink: 0,
-            cursor: 'pointer',
+            ...sectionHeader,
+            background: 'var(--color-surface-alt)',
+            borderBottom: showLocals ? 'var(--border-hairline)' : 'none',
           }}
           onClick={() => setShowLocals(!showLocals)}
         >
-          <span style={{ fontSize: 12, fontWeight: 600, color: '#555' }}>📦 局部变量</span>
-          {locals.length > 0 && (
-            <span
-              style={{
-                fontSize: 10, color: '#999', background: '#eee',
-                borderRadius: 8, padding: '1px 6px', marginLeft: 6,
-              }}
-            >
-              {locals.length}
-            </span>
-          )}
-          <span style={{ marginLeft: 'auto', fontSize: 10, color: '#ccc', transform: showLocals ? 'rotate(180deg)' : undefined, transition: 'transform 0.2s' }}>
-            ▼
-          </span>
+          <span style={sectionLabel}>Local Variables</span>
+          {locals.length > 0 && <span style={sectionBadge}>{locals.length}</span>}
+          {arrow(showLocals)}
         </div>
 
         {showLocals && (
-        <div style={{ flex: 1, overflowY: 'auto' }}>
-          {locals.length === 0 ? (
-            <div
-              style={{
-                fontSize: 12, color: '#bbb', padding: 24,
-                textAlign: 'center', fontStyle: 'italic',
-              }}
-            >
-              {snapshot ? '当前作用域无局部变量' : '编译运行代码后开始调试'}
-            </div>
-          ) : (
-            <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid #eee', color: '#999', fontSize: 11, textAlign: 'center' }}>
-                  <th style={{ padding: '6px 8px', fontWeight: 500 }}>变量名</th>
-                  <th style={{ padding: '6px 8px', fontWeight: 500 }}>类型</th>
-                  <th style={{ padding: '6px 8px', fontWeight: 500 }}>值</th>
-                </tr>
-              </thead>
-              <tbody>
-                {locals.map((v, i) => (
-                  <tr
-                    key={i}
-                    style={{ borderBottom: '1px solid #f5f5f5', transition: 'background 0.1s' }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = '#f0f7ff')}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                  >
-                    <td
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            {locals.length === 0 ? (
+              <div style={{
+                fontSize: 12, fontFamily: 'var(--font-mono)',
+                color: 'var(--color-text-tertiary)', padding: 24,
+                textAlign: 'center',
+              }}>
+                {snapshot ? '当前作用域无局部变量' : '编译运行代码后开始调试'}
+              </div>
+            ) : (
+              <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{
+                    borderBottom: 'var(--border-hairline)',
+                    color: 'var(--color-text-tertiary)',
+                    fontSize: 10,
+                    fontFamily: 'var(--font-mono)',
+                    fontWeight: 500,
+                    textTransform: 'uppercase',
+                  }}>
+                    <th style={{ padding: '4px 8px', fontWeight: 500, textAlign: 'center' }}>Name</th>
+                    <th style={{ padding: '4px 8px', fontWeight: 500, textAlign: 'center' }}>Type</th>
+                    <th style={{ padding: '4px 8px', fontWeight: 500, textAlign: 'center' }}>Value</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {locals.map((v, i) => (
+                    <tr
+                      key={i}
                       style={{
-                        padding: '5px 8px',
-                        fontFamily: 'SF Mono, Menlo, Monaco, monospace',
-                        color: '#1a73e8', fontWeight: 500,
-                        textAlign: 'center',
+                        borderBottom: '1px solid var(--color-border)',
+                        transition: 'background 0.1s',
                       }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-surface-alt)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                     >
-                      {v.name}
-                    </td>
-                    <td
-                      style={{
+                      <td style={{
                         padding: '5px 8px',
-                        fontFamily: 'SF Mono, Menlo, Monaco, monospace', color: '#888',
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 12,
+                        color: 'var(--color-copper)',
+                        fontWeight: 500,
                         textAlign: 'center',
-                      }}
-                    >
-                      {v.type}
-                      {v.is_pointer && <span style={{ color: '#e65100' }}>*</span>}
-                    </td>
-                    <td
-                      style={{
+                      }}>
+                        {v.name}
+                      </td>
+                      <td style={{
                         padding: '5px 8px',
-                        fontFamily: 'SF Mono, Menlo, Monaco, monospace',
-                        color: v.is_pointer ? '#e65100' : '#2e7d32',
-                        textAlign: 'center', fontWeight: v.is_pointer ? 500 : 400,
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 11,
+                        color: 'var(--color-text-secondary)',
+                        textAlign: 'center',
+                      }}>
+                        {v.type}
+                        {v.is_pointer && <span style={{ color: 'var(--color-copper)' }}>*</span>}
+                      </td>
+                      <td style={{
+                        padding: '5px 8px',
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 12,
+                        color: v.is_pointer ? 'var(--color-copper)' : 'var(--color-teal)',
+                        textAlign: 'center',
+                        fontWeight: v.is_pointer ? 500 : 400,
                         maxWidth: 200, overflow: 'hidden',
                         textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                       }}
-                      title={(v.display_value || v.value) + (v.is_pointer ? '' : '')}
-                    >
-                      {fmtDisplay(v)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+                        title={(v.display_value || v.value) + (v.is_pointer ? '' : '')}
+                      >
+                        {fmtDisplay(v)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
         )}
       </div>
 
-      {/* 标注管理 — @viz panel */}
+      {/* ── Annotation Panel ────────────────────────────────────── */}
       <AnnotationPanel />
 
-      {/* 可视化目标 — §v0.8 click-to-select checkboxes */}
+      {/* ── Visualization Targets ───────────────────────────────── */}
       {candidates.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', flexShrink: showTargets ? 0 : undefined }}>
+        <div style={{
+          display: 'flex', flexDirection: 'column', overflow: 'hidden',
+          flexShrink: showTargets ? 0 : undefined,
+        }}>
           <div
             style={{
-              height: 32, background: '#fafafa',
-              borderTop: '2px solid #e8e8e8',
-              borderBottom: showTargets ? '1px solid #e8e8e8' : 'none',
-              display: 'flex', alignItems: 'center', padding: '0 12px', flexShrink: 0,
-              cursor: 'pointer',
+              ...sectionHeader,
+              background: 'var(--color-surface-alt)',
+              borderTop: showTargets ? 'var(--border-hairline)' : 'none',
+              borderBottom: showTargets ? 'var(--border-hairline)' : 'none',
             }}
             onClick={() => setShowTargets(!showTargets)}
           >
-            <span style={{ fontSize: 12, fontWeight: 600, color: '#555' }}>🎯 可视化目标</span>
-            <span
-              style={{
-                fontSize: 10, color: '#999', background: '#e8f5e9',
-                borderRadius: 8, padding: '1px 6px', marginLeft: 6,
-              }}
-            >
+            <span style={sectionLabel}>Viz Targets</span>
+            <span style={{
+              ...sectionBadge,
+              color: 'var(--color-teal)',
+              background: 'var(--color-teal-light)',
+            }}>
               {selectedVars.size}/{candidates.length}
             </span>
-            <span style={{ marginLeft: 'auto', fontSize: 10, color: '#ccc', transform: showTargets ? 'rotate(180deg)' : undefined, transition: 'transform 0.2s' }}>
-              ▼
-            </span>
+            {arrow(showTargets)}
           </div>
 
           {showTargets && (
             <div style={{ maxHeight: 200, overflowY: 'auto', padding: '4px 0' }}>
-              {/* Quick actions */}
-              <div style={{ display: 'flex', gap: 4, padding: '4px 12px', borderBottom: '1px solid #f5f5f5' }}>
-                <button
-                  onClick={selectAllVars}
-                  style={{
-                    flex: 1, padding: '2px 0', fontSize: 10, borderRadius: 3,
-                    border: '1px solid #e8e8e8', background: '#fff', color: '#666',
-                    cursor: 'pointer',
-                  }}
-                >
+              <div style={{
+                display: 'flex', gap: 4, padding: '4px 12px',
+                borderBottom: 'var(--border-hairline)',
+              }}>
+                <button onClick={selectAllVars} style={{
+                  flex: 1, padding: '3px 0', fontSize: 10, borderRadius: 'var(--radius-sm)',
+                  fontFamily: 'var(--font-ui)', fontWeight: 500,
+                  border: '1px solid var(--color-border)', background: 'transparent',
+                  color: 'var(--color-text-secondary)', cursor: 'pointer',
+                }}>
                   全选
                 </button>
-                <button
-                  onClick={deselectAllVars}
-                  style={{
-                    flex: 1, padding: '2px 0', fontSize: 10, borderRadius: 3,
-                    border: '1px solid #e8e8e8', background: '#fff', color: '#666',
-                    cursor: 'pointer',
-                  }}
-                >
+                <button onClick={deselectAllVars} style={{
+                  flex: 1, padding: '3px 0', fontSize: 10, borderRadius: 'var(--radius-sm)',
+                  fontFamily: 'var(--font-ui)', fontWeight: 500,
+                  border: '1px solid var(--color-border)', background: 'transparent',
+                  color: 'var(--color-text-secondary)', cursor: 'pointer',
+                }}>
                   全不选
                 </button>
               </div>
@@ -230,34 +251,41 @@ export default function VariablePanel() {
                       padding: '5px 12px', cursor: 'pointer',
                       fontSize: 12, userSelect: 'none',
                       transition: 'background 0.1s',
-                      opacity: checked ? 1 : 0.5,
+                      opacity: checked ? 1 : 0.45,
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = '#f0f7ff')}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-surface-alt)')}
                     onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                   >
-                    {/* Custom checkbox */}
-                    <span
-                      style={{
-                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                        width: 16, height: 16, borderRadius: 3, flexShrink: 0,
-                        border: checked ? 'none' : '1.5px solid #ccc',
-                        background: checked ? '#1a73e8' : '#fff',
-                        color: '#fff', fontSize: 10, fontWeight: 700,
-                        transition: 'all 0.15s',
-                      }}
-                    >
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      width: 16, height: 16, borderRadius: 'var(--radius-sm)', flexShrink: 0,
+                      border: checked ? 'none' : '1.5px solid var(--color-border)',
+                      background: checked ? 'var(--color-ink)' : 'transparent',
+                      color: '#ffffff', fontSize: 10, fontWeight: 700,
+                      transition: 'all 0.15s',
+                    }}>
                       {checked ? '✓' : ''}
                     </span>
-                    <span style={{ fontSize: 14 }}>{candidateIcon(c.struct_type)}</span>
                     <span style={{
-                      fontFamily: 'SF Mono, Menlo, Monaco, monospace',
-                      color: '#1a73e8', fontWeight: 500,
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 12,
+                      color: checked ? 'var(--color-ink)' : 'var(--color-text-secondary)',
+                      fontWeight: 500,
                     }}>
                       {c.var_name}
                     </span>
-                    <span style={{ color: '#999', fontSize: 10, marginLeft: 'auto' }}>
+                    <span style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 10,
+                      color: 'var(--color-text-tertiary)',
+                      marginLeft: 'auto',
+                    }}>
                       {candidateLabel(c.struct_type)}
-                      {c.node_count > 0 && <span style={{ marginLeft: 4, color: '#ccc' }}>({c.node_count})</span>}
+                      {c.node_count > 0 && (
+                        <span style={{ marginLeft: 4, color: 'var(--color-text-tertiary)' }}>
+                          ({c.node_count})
+                        </span>
+                      )}
                     </span>
                   </div>
                 );
@@ -267,54 +295,47 @@ export default function VariablePanel() {
         </div>
       )}
 
-      {/* 程序输出 */}
-      <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', flexShrink: showOutput ? 0 : undefined }}>
+      {/* ── Program Output ──────────────────────────────────────── */}
+      <div style={{
+        display: 'flex', flexDirection: 'column', overflow: 'hidden',
+        flexShrink: showOutput ? 0 : undefined,
+      }}>
         <div
           style={{
-            height: 32, background: '#fafafa',
-            borderTop: '2px solid #e8e8e8',
-            borderBottom: showOutput ? '1px solid #e8e8e8' : 'none',
-            display: 'flex', alignItems: 'center', padding: '0 12px', flexShrink: 0,
-            cursor: 'pointer',
+            ...sectionHeader,
+            background: 'var(--color-surface-alt)',
+            borderTop: showOutput ? 'var(--border-hairline)' : 'none',
+            borderBottom: showOutput ? 'var(--border-hairline)' : 'none',
           }}
           onClick={() => setShowOutput(!showOutput)}
         >
-          <span style={{ fontSize: 12, fontWeight: 600, color: '#555' }}>💻 程序输出</span>
+          <span style={sectionLabel}>Stdout</span>
           {stdout.length > 0 && (
-            <span
-              style={{
-                fontSize: 10, color: '#999', background: '#eee',
-                borderRadius: 8, padding: '1px 6px', marginLeft: 6,
-              }}
-            >
-              {stdout.split('\n').filter(Boolean).length} 行
+            <span style={sectionBadge}>
+              {stdout.split('\n').filter(Boolean).length} lines
             </span>
           )}
-          <span style={{ marginLeft: 'auto', fontSize: 10, color: '#ccc', transform: showOutput ? 'rotate(180deg)' : undefined, transition: 'transform 0.2s' }}>
-            ▼
-          </span>
+          {arrow(showOutput)}
         </div>
 
         {showOutput && (
           <div style={{ maxHeight: 140, overflowY: 'auto' }}>
             {stdout.length === 0 ? (
-              <div
-                style={{
-                  fontSize: 12, color: '#bbb', padding: 16,
-                  textAlign: 'center', fontStyle: 'italic',
-                }}
-              >
+              <div style={{
+                fontSize: 12, fontFamily: 'var(--font-mono)',
+                color: 'var(--color-text-tertiary)', padding: 16,
+                textAlign: 'center',
+              }}>
                 暂无输出
               </div>
             ) : (
-              <pre
-                style={{
-                  margin: 0, padding: '8px 12px',
-                  fontSize: 12, fontFamily: 'SF Mono, Menlo, Monaco, monospace',
-                  color: '#333', lineHeight: '1.6', whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word',
-                }}
-              >
+              <pre style={{
+                margin: 0, padding: '8px 12px',
+                fontSize: 12, fontFamily: 'var(--font-mono)',
+                color: 'var(--color-text)', lineHeight: '1.6',
+                whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                background: 'var(--color-surface-alt)',
+              }}>
                 {stdout}
               </pre>
             )}
@@ -322,43 +343,33 @@ export default function VariablePanel() {
         )}
       </div>
 
-      {/* 调用栈 */}
-      <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', flexShrink: showCallStack ? 0 : undefined }}>
+      {/* ── Call Stack ──────────────────────────────────────────── */}
+      <div style={{
+        display: 'flex', flexDirection: 'column', overflow: 'hidden',
+        flexShrink: showCallStack ? 0 : undefined,
+      }}>
         <div
           style={{
-            height: 32, background: '#fafafa',
-            borderBottom: showCallStack ? '1px solid #e8e8e8' : 'none',
-            display: 'flex', alignItems: 'center', padding: '0 12px', flexShrink: 0,
-            cursor: 'pointer',
+            ...sectionHeader,
+            background: 'var(--color-surface-alt)',
+            borderBottom: showCallStack ? 'var(--border-hairline)' : 'none',
           }}
           onClick={() => setShowCallStack(!showCallStack)}
         >
-          <span style={{ fontSize: 12, fontWeight: 600, color: '#555' }}>📚 调用栈</span>
-          {callStack.length > 0 && (
-            <span
-              style={{
-                fontSize: 10, color: '#999', background: '#eee',
-                borderRadius: 8, padding: '1px 6px', marginLeft: 6,
-              }}
-            >
-              {callStack.length}
-            </span>
-          )}
-          <span style={{ marginLeft: 'auto', fontSize: 10, color: '#ccc', transform: showCallStack ? 'rotate(180deg)' : undefined, transition: 'transform 0.2s' }}>
-            ▼
-          </span>
+          <span style={sectionLabel}>Call Stack</span>
+          {callStack.length > 0 && <span style={sectionBadge}>{callStack.length}</span>}
+          {arrow(showCallStack)}
         </div>
 
         {showCallStack && (
           <div style={{ overflowY: 'auto' }}>
             {callStack.length === 0 ? (
-              <div
-                style={{
-                  fontSize: 12, color: '#bbb', padding: 16,
-                  textAlign: 'center', fontStyle: 'italic',
-                }}
-              >
-                —
+              <div style={{
+                fontSize: 12, fontFamily: 'var(--font-mono)',
+                color: 'var(--color-text-tertiary)', padding: 16,
+                textAlign: 'center',
+              }}>
+                {'—'}
               </div>
             ) : (
               callStack.map((f, i) => (
@@ -366,15 +377,18 @@ export default function VariablePanel() {
                   key={i}
                   style={{
                     padding: '5px 12px', fontSize: 11,
-                    fontFamily: 'SF Mono, Menlo, Monaco, monospace',
-                    borderBottom: '1px solid #f5f5f5',
-                    color: i === 0 ? '#1a73e8' : '#999',
+                    fontFamily: 'var(--font-mono)',
+                    borderBottom: 'var(--border-hairline)',
+                    color: i === 0 ? 'var(--color-ink)' : 'var(--color-text-secondary)',
                     fontWeight: i === 0 ? 500 : 400,
                   }}
                 >
-                  <span style={{ color: '#bbb', marginRight: 4 }}>#{i}</span>
+                  <span style={{ color: 'var(--color-text-tertiary)', marginRight: 4 }}>#{i}</span>
                   {f.function || '??'}()
-                  <span style={{ color: '#bbb', marginLeft: 6, fontSize: 10 }}>
+                  <span style={{
+                    color: 'var(--color-text-tertiary)',
+                    marginLeft: 6, fontSize: 10,
+                  }}>
                     {f.file}:{f.line}
                   </span>
                 </div>

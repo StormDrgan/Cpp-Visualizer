@@ -3,6 +3,8 @@
 > **目标用户**：个人开发者，用于理解复杂数据结构与算法代码
 > **核心体验**：逐行步进 → 可前进/后退 → 指针位置实时可视化
 > **版本**：v0.10，持续迭代
+>
+> **📐 前端视觉重设计**：详见 [DESIGN-FRONTEND.md](./DESIGN-FRONTEND.md) — “Graph Paper” 浅色主题、Design Token 系统、全部 10 种数据结构 Canvas 渲染器重设计、Monaco 编辑器主题、组件样式规范
 
 ---
 
@@ -361,6 +363,11 @@ class MemoryWalker:
 ---
 
 ## 4. 前端设计
+
+> **📐 v1.0 视觉重设计**：前端视觉已独立为详细设计文档 → **[DESIGN-FRONTEND.md](./DESIGN-FRONTEND.md)**
+> 包含：Design Token 系统（色板/字体/间距/圆角）、10 种数据结构 Canvas 渲染器规格、Monaco 浅色主题、全部组件样式、动画映射表、UX 检查清单、5 阶段实施路线图。
+>
+> 以下为架构级设计（技术选型、布局结构、状态机、通信协议），视觉细节以 DESIGN-FRONTEND.md 为准。
 
 ### 4.1 技术选型
 

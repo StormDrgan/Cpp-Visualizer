@@ -1,7 +1,16 @@
 import { Fragment } from 'react';
 import { Rect, Text, Arrow, Group, Line } from 'react-konva';
 import type { HeapStructure } from '../../../types';
-import { NODE_W, NODE_H, NODE_GAP, NODE_RADIUS, START_X, CONTENT_MARGIN } from '../constants';
+import {
+  NODE_W, NODE_H, NODE_GAP, NODE_RADIUS, START_X, CONTENT_MARGIN,
+  NODE_FILL, NODE_STROKE, NODE_STROKE_WIDTH,
+  NODE_POINTED_FILL, NODE_POINTED_STROKE,
+  EDGE_STROKE, EDGE_WIDTH,
+  POINTER_LINE_COLOR, POINTER_TAG_FILL, POINTER_TAG_STROKE,
+  POINTER_TEXT_COLOR, POINTER_FONT_SIZE,
+  CANVAS_TEXT_FILL, CANVAS_TEXT_TERTIARY, CANVAS_FONT,
+  EMPTY_FILL, EMPTY_STROKE,
+} from '../constants';
 import { nodeDisplayValue } from '../utils';
 import { getLinkedListLayout } from '../layouts/linkedList';
 
@@ -13,9 +22,9 @@ export function renderLinkedList(
   if (!layout) {
     return (
       <Group key={`${struct.annotation_name}-empty`} x={canvasSize.w / 2 - 30} y={canvasSize.h / 2 - 20}>
-        <Rect width={60} height={40} cornerRadius={4} fill="#f5f5f5" stroke="#ccc" strokeWidth={1} />
-        <Text text="NULL" x={0} y={0} width={60} height={40} align="center" verticalAlign="middle" fontSize={13} fill="#999" fontStyle="bold" />
-        <Text text={struct.annotation_name} x={30} y={45} fontSize={11} fill="#bbb" align="center" />
+        <Rect width={60} height={40} cornerRadius={4} fill={EMPTY_FILL} stroke={EMPTY_STROKE} strokeWidth={1} dash={[4, 3]} />
+        <Text text="EMPTY" x={0} y={0} width={60} height={40} align="center" verticalAlign="middle" fontSize={11} fontFamily={CANVAS_FONT} fontStyle="bold" fill={CANVAS_TEXT_TERTIARY} />
+        <Text text={struct.annotation_name} x={30} y={45} fontSize={10} fontFamily={CANVAS_FONT} fill={CANVAS_TEXT_TERTIARY} align="center" />
       </Group>
     );
   }
@@ -35,7 +44,7 @@ export function renderLinkedList(
         key={`arrow-fwd-${i}`}
         points={[from.cx + NODE_W / 2 + 4, from.cy - 6, to.cx - NODE_W / 2 - 4, to.cy - 6]}
         pointerLength={8} pointerWidth={8}
-        fill="#888" stroke="#888" strokeWidth={2}
+        fill={EDGE_STROKE} stroke={EDGE_STROKE} strokeWidth={EDGE_WIDTH}
       />
     );
     // Backward arrow for doubly linked list (bottom, reversed direction)
@@ -45,7 +54,7 @@ export function renderLinkedList(
           key={`arrow-bwd-${i}`}
           points={[to.cx - NODE_W / 2 - 4, to.cy + 6, from.cx + NODE_W / 2 + 4, from.cy + 6]}
           pointerLength={8} pointerWidth={8}
-          fill="#bbb" stroke="#bbb" strokeWidth={2}
+          fill={EDGE_STROKE} stroke={EDGE_STROKE} strokeWidth={EDGE_WIDTH}
         />
       );
     }
@@ -58,7 +67,7 @@ export function renderLinkedList(
     elements.push(
       <Text key="nullptr" text="∅"
         x={lp.cx + NODE_W / 2 + 12} y={lp.cy - 8}
-        fontSize={16} fill="#bbb" fontStyle="bold"
+        fontSize={16} fill={CANVAS_TEXT_TERTIARY} fontStyle="bold"
       />
     );
   }
@@ -78,11 +87,9 @@ export function renderLinkedList(
           x={x} y={y}
           width={NODE_W} height={NODE_H}
           cornerRadius={NODE_RADIUS}
-          fill={hasPointers ? '#e3f2fd' : '#fafafa'}
-          stroke={hasPointers ? '#1a73e8' : '#d0d0d0'}
-          strokeWidth={hasPointers ? 2 : 1}
-          shadowColor={hasPointers ? 'rgba(26,115,232,0.15)' : 'transparent'}
-          shadowBlur={6}
+          fill={hasPointers ? NODE_POINTED_FILL : NODE_FILL}
+          stroke={hasPointers ? NODE_POINTED_STROKE : NODE_STROKE}
+          strokeWidth={NODE_STROKE_WIDTH}
         />
         <Text
           name={`label-${node.addr}`}
@@ -90,7 +97,7 @@ export function renderLinkedList(
           x={x} y={y}
           width={NODE_W} height={NODE_H}
           align="center" verticalAlign="middle"
-          fontSize={14} fontStyle="bold" fill="#333"
+          fontSize={14} fontFamily={CANVAS_FONT} fontStyle="bold" fill={CANVAS_TEXT_FILL}
         />
       </Group>
     );
@@ -112,7 +119,7 @@ export function renderLinkedList(
         <Line
           key={`ptr-line-${node.addr}-${ptr}`}
           points={[cx, nodeBottom, cx, labelY - 4]}
-          stroke="#e65100" strokeWidth={1} dash={[3, 3]}
+          stroke={POINTER_LINE_COLOR} strokeWidth={1} dash={[3, 3]}
         />
       );
       elements.push(
@@ -120,7 +127,7 @@ export function renderLinkedList(
           key={`ptr-bg-${node.addr}-${ptr}`}
           x={cx - 24} y={labelY - 2}
           width={48} height={18} cornerRadius={3}
-          fill="#fff3e0" stroke="#e65100" strokeWidth={1}
+          fill={POINTER_TAG_FILL} stroke={POINTER_TAG_STROKE} strokeWidth={1}
         />
       );
       elements.push(
@@ -130,7 +137,7 @@ export function renderLinkedList(
           x={cx - 24} y={labelY - 2}
           width={48} height={18}
           align="center" verticalAlign="middle"
-          fontSize={10} fontStyle="bold" fill="#e65100"
+          fontSize={POINTER_FONT_SIZE} fontFamily={CANVAS_FONT} fontStyle="bold" fill={POINTER_TEXT_COLOR}
         />
       );
     });
@@ -138,4 +145,3 @@ export function renderLinkedList(
 
   return <Group key={struct.annotation_name}>{elements}</Group>;
 }
-
