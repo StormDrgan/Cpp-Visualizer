@@ -2,9 +2,9 @@
 
 > **目标用户**：个人开发者，用于理解复杂数据结构与算法代码
 > **核心体验**：逐行步进 → 可前进/后退 → 指针位置实时可视化
-> **版本**：v0.10，持续迭代
+> **版本**：v0.10
 >
-> **📐 前端视觉重设计**：详见 [DESIGN-FRONTEND.md](./DESIGN-FRONTEND.md) — “Graph Paper” 浅色主题、Design Token 系统、全部 10 种数据结构 Canvas 渲染器重设计、Monaco 编辑器主题、组件样式规范
+> **📐 前端视觉规范**：§4 是前端设计的唯一权威来源。所有前端修改必须先阅读 §4（Design Token、组件样式、Canvas 渲染器规格、动画映射表），严格遵循其中规范。
 
 ---
 
@@ -13,7 +13,18 @@
 1. [产品概述](#1-产品概述)
 2. [架构总览](#2-架构总览)
 3. [后端设计](#3-后端设计)
-4. [前端设计](#4-前端设计)
+4. [前端设计 — “Graph Paper”](#4-前端设计--graph-paper-视觉系统)
+   - [4.1 设计哲学](#41-设计哲学)
+   - [4.2 技术选型](#42-技术选型)
+   - [4.3 Design Token 系统](#43-design-token-系统)
+   - [4.4 页面布局](#44-页面布局)
+   - [4.5 组件样式](#45-组件样式)
+   - [4.6 Monaco 编辑器主题](#46-monaco-编辑器主题)
+   - [4.7 Canvas 可视化系统](#47-canvas-可视化系统)
+   - [4.8 动画设计](#48-动画设计)
+   - [4.9 前端状态机](#49-前端状态机)
+   - [4.10 Canvas 颜色常量速查表](#410-canvas-颜色常量速查表)
+   - [4.11 UX 检查清单](#411-ux-检查清单)
 5. [通信协议](#5-通信协议)
 6. [数据结构可视化方案](#6-数据结构可视化方案)
 7. [开发路线图](#7-开发路线图)
@@ -362,237 +373,232 @@ class MemoryWalker:
 
 ---
 
-## 4. 前端设计
+## 4. 前端设计 — “Graph Paper” 视觉系统
 
-> **📐 v1.0 视觉重设计**：前端视觉已独立为详细设计文档 → **[DESIGN-FRONTEND.md](./DESIGN-FRONTEND.md)**
-> 包含：Design Token 系统（色板/字体/间距/圆角）、10 种数据结构 Canvas 渲染器规格、Monaco 浅色主题、全部组件样式、动画映射表、UX 检查清单、5 阶段实施路线图。
->
-> 以下为架构级设计（技术选型、布局结构、状态机、通信协议），视觉细节以 DESIGN-FRONTEND.md 为准。
+> **设计方向**：工程实验笔记本 — 暖白纸页、普鲁士蓝墨水、铜色指针、石墨网格
+> **核心风险**：为开发者工具做浅色主题（行业内几乎全员深色）
+> **版本**：v1.0
+> **设计工具**：frontend-design（设计思维）+ ui-ux-pro-max（色板/字体/UX 规则）
+> **最后更新**：2026-06-24
 
-### 4.1 技术选型
+---
+
+### 4.1 设计哲学
+
+**产品身份**：C/C++ Visualizer 是一个教学/理解工具——用户用它来**观看代码在内存中执行**。它不是 IDE，而是一台「软件示波器」：把指针、堆内存、数据结构变化这些肉眼不可见的东西，变成可以逐帧观察的图形。
+
+**为什么选浅色**：几乎每一个代码可视化工具都默认深色主题。这个工具的用户大部分是**学习者**——他们在看书、记笔记、画草稿。一个暖白纸页的浅色环境，让数据结构图看起来像课本插图，这恰好是学习场景中最自然的信息载体。
+
+**三大 cliché 对照**：
+
+| AI 设计模板 | 本设计 |
+|---|---|
+| 暖黄底 + 衬线体 + 陶土红 | 暖白底（更冷更中性），无衬线 UI + 等宽代码，蓝/铜双色 |
+| 纯黑底 + 荧光绿/朱红 | 浅色主题，完全不适用 |
+| 报纸式排版 + 极细线 | 清晰的卡片/面板布局，非密集列排版 |
+
+**不做的事**：不做渐变按钮、玻璃态、发光阴影。不做装饰性动画 — 仅保留功能性过渡。不用 emoji 做图标 — 全部 SVG。Canvas 不显示 C++ 类型名和内存地址 — 仅展示关键值和指针标签。
+
+---
+
+### 4.2 技术选型
 
 | 组件 | 选型 | 理由 |
 |---|---|---|
 | 框架 | React 18+ | 生态成熟，状态管理方便 |
 | 语言 | TypeScript | 类型安全 |
-| 代码编辑器 | Monaco Editor（VS Code 的编辑器核心） | 语法高亮、断点、diff 等开箱即用 |
-| 可视化渲染 | Canvas API（手绘）或 **Konva.js / PixiJS** | 图形操作灵活，性能好 |
-| 布局引擎 | 手写（链表简单）+ **dagre / elkjs**（树/图自动布局） | dagre 对 DAG/树支持好 |
-| 动画 | CSS Transitions / requestAnimationFrame | 指针移动、节点高亮过渡动画 |
-| WebSocket 客户端 | 原生 WebSocket API | 简单够用 |
-| 状态管理 | Zustand 或 React Context + useReducer | 轻量，不引入 Redux 的复杂度 |
-| CSS | Tailwind CSS | 快速出 UI |
+| 代码编辑器 | Monaco Editor | 语法高亮、断点、diff 开箱即用 |
+| 可视化渲染 | Konva.js (react-konva) | Canvas 图形操作灵活，性能好 |
+| 布局引擎 | 手写（链表/栈/队列/数组）+ 自实现树/图布局 | 可控性优先 |
+| 动画 | Konva.Tween + requestAnimationFrame | 节点级精准动画控制 |
+| WebSocket | 原生 WebSocket API | 双向实时通信 |
+| 状态管理 | Zustand | 轻量，不引入 Redux 复杂度 |
+| CSS | Tailwind CSS + CSS Custom Properties | Token 化色彩系统 + 原子类 |
 
-### 4.2 页面布局
+---
 
-**当前布局（v0.9）：左侧代码（带分类模板选择器），右侧上下分割（画布上 + 变量下），底部控制栏集成步骤历史**
+### 4.3 Design Token 系统
 
-**可视化面板显示规则**：仅显示节点存储的关键值（如 val、key），不显示数据结构类型名和内存地址。指针标签（head/top/front/rear/root）保留以辅助理解数据流。数组/队列索引保留以辅助定位。
+#### 4.3.1 色板
 
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│ Header: 模板选择器（分类卡片弹窗 + 搜索） + 会话状态指示器             │
-├───────────────────┬──────────────────────────────────────────────────┤
-│                   │  可视化画布（上部，可拖拽调整占比）                 │
-│   代码编辑区       │  (Konva Canvas，支持拖拽平移 + 滚轮缩放)         │
-│  (Monaco Editor)  │                                                  │
-│                   │   ┌──4──┐                                        │
-│  ┌──────────────┐ │      /    \          [链表] [3]→[4]→[5]          │
-│  │              │ │   ┌─2─┐ ┌─6─┐       ↑      ↑                   │
-│  │  1  ListNode │ │   1   3 5   7      slow   fast                  │
-│  │  2  *merge(..│ │                                                  │
-│  │  3    slow = │ ├──────────────────────────────────────────────────┤
-│  │  4    while..│ │  信息面板（下部，各区块可折叠）                    │
-│  │> 5    fast = │ │  ┌─────────────────────────────────────────────┐ │
-│  │  6    ...    │ │  │ 📦 局部变量                                  │ │
-│  │              │ │  │ head   ListNode*  {val=1, next=…}           │ │
-│  └──────────────┘ │  │ slow   ListNode*  {val=3, next=…}           │ │
-│                   │  └─────────────────────────────────────────────┘ │
-│                   │  ┌─────────────────────────────────────────────┐ │
-│                   │  │ 💻 程序输出（stdout）                        │ │
-│                   │  └─────────────────────────────────────────────┘ │
-│                   │  ┌─────────────────────────────────────────────┐ │
-│                   │  │ 🎯 可视化目标（checkbox 勾选过滤）           │ │
-│                   │  └─────────────────────────────────────────────┘ │
-│                   │  ┌─────────────────────────────────────────────┐ │
-│                   │  │ 🏷️ 标注管理（@viz 面板 + 光标行快捷插入）   │ │
-│                   │  └─────────────────────────────────────────────┘ │
-│                   │  ┌─────────────────────────────────────────────┐ │
-│                   │  │ 📚 调用栈                                   │ │
-│                   │  └─────────────────────────────────────────────┘ │
-├───────────────────┴──────────────────────────────────────────────────┤
-│ 控制栏 [后退 ◀] [▶ 前进一步] [⏩ 运行] [↺ 重置] [Step 5/20 ▾ 步骤历史]│
-└──────────────────────────────────────────────────────────────────────┘
+| Token | Hex | 用途 |
+|---|---|---|
+| `--color-page` | `#fafaf7` | 页面底色 — 暖白纸 |
+| `--color-surface` | `#ffffff` | 面板、卡片、编辑器背景 |
+| `--color-surface-alt` | `#f5f4f0` | 交替行底色、hover 态 |
+| `--color-border` | `#e4e1da` | 分割线、卡片边框 |
+| `--color-grid` | `#ece9e2` | Canvas 点阵网格 — 坐标纸 |
+| `--color-ink` | `#1e4d7b` | 主强调色 — 普鲁士蓝。按钮、链接、执行行高亮 |
+| `--color-ink-light` | `#eaf1f7` | Ink 浅色 — 选中背景 |
+| `--color-ink-hover` | `#163d62` | Ink 深色 — 按钮 hover |
+| `--color-copper` | `#b8703d` | 指针强调色 — 铜迹线。指针标签、内存地址 |
+| `--color-copper-light` | `#fdf3e8` | Copper 浅色 — 指针标签背景 |
+| `--color-teal` | `#2d8a7b` | 数据强调色 — 深绿松石。图边、数据节点 |
+| `--color-teal-light` | `#edf7f5` | Teal 浅色 |
+| `--color-red` | `#c4312b` | 错误/断点 — 红笔批改色 |
+| `--color-red-light` | `#fef5f5` | Red 浅色 — 错误背景 |
+
+**文字色阶**：`--color-text` `#1c1c1c` | `--color-text-secondary` `#6b6b65` | `--color-text-tertiary` `#9c9b95`
+
+**语义状态色**：idle=`#9c9b95` | ready=`#1e4d7b` | stepping/running=`#2d8a7b` | rewinding=`#b8703d` | paused=`#1e4d7b` | terminated=`#6b6b65` | error=`#c4312b`
+
+#### 4.3.2 字体
+
+| 角色 | 字体 | 权重 |
+|---|---|---|
+| **UI** | IBM Plex Sans | 400 / 500 / 600 |
+| **代码** | JetBrains Mono | 400 / 500 |
+| **Canvas** | JetBrains Mono | 400 / 500 |
+
+Google Fonts 导入：
+```css
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 ```
 
-### 4.3 可视化画布 — 不同数据结构的渲染方式
+**字号阶梯**：body=13px | ui=12px | caption=11px | code=13px | canvas-node=12px | canvas-label=10px | display=14px
 
-#### 链表渲染
+#### 4.3.3 间距、圆角、阴影、边框
 
-```
-链表节点渲染为矩形方块，指针渲染为带标签的小箭头：
+- **间距**：4px 基准（4/8/12/16/24）
+- **圆角**：sm=3px | md=4px | lg=6px
+- **阴影**：仅 `--shadow-popover: 0 4px 24px rgba(0,0,0,0.10)` 用于弹窗，其他表面用边框区分层次
+- **边框**：`--border-hairline: 1px solid var(--color-border)` | `--border-focus: 2px solid var(--color-ink)` | `--border-active: 1.5px solid var(--color-ink)`
 
-  ┌─────┐     ┌─────┐     ┌─────┐     ┌─────┐
-  │  3  │────→│  4  │────→│  5  │────→│  6  │──→ nullptr
-  └─────┘     └─────┘     └─────┘     └─────┘
-     ↑                       ↑
-  ┌──┴──┐               ┌───┴──┐
-  │slow │               │ fast │
-  └─────┘               └──────┘
+---
 
-- 有指针指向的节点用特定颜色边框高亮
-- 当前正在被修改的节点闪动
-- 如果是环形链表，最后一个节点指向入口形成一个环
-- 单向链表用实线箭头（#888），双向链表的 prev 反向箭头用浅灰虚线（#bbb，下方偏移 +6px）
-- 指针标签（head/slow/fast）用橙色虚线（#e65100, dash=3,3）+ 圆角矩形，位于节点下方
-```
-
-#### 二叉树渲染
+### 4.4 页面布局
 
 ```
-标准树形布局（可切换多种布局）：
-
-  水平展开（默认）：
-        ┌──4──┐
-     ┌──2──┐ ┌──6──┐
-     1     3 5     7
-
-  紧凑展开：
-          4
-        /   \
-       2     6
-      / \   / \
-     1   3 5   7
-
-- 当前访问节点高亮（比如 BST 搜索，当前比较的节点亮黄色）
-- 已访问路径用不同颜色（比如搜索路径红色标出）
-- NULL 子节点用小空心圆表示
-- 新增/删除节点有过渡动画
-
-树形布局算法：dagre 或自实现 Reingold-Tilford 算法
+┌──────────────────────────────────────────────────────────┐
+│ Header                             40px  Page bg          │
+│ ───────────────────────────────────────────────────────── │ ← hairline border
+├──────────────────┬───────────────────────────────────────┤
+│                  │  Canvas Area        flex: 1            │
+│  Code Editor     │  (dot-grid bg, overflow: auto)        │
+│  (Monaco)        │                                       │
+│  min 20%         ├───────────────────────────────────────┤ ← hairline border
+│  max 75%         │  Variable Panel     flex: 0 1 auto    │
+│                  │  (collapsible sections)               │
+├──────────────────┴───────────────────────────────────────┤
+│ ───────────────────────────────────────────────────────── │ ← hairline border
+│ Control Bar                          36px                │
+└──────────────────────────────────────────────────────────┘
 ```
 
-#### 数组渲染
+- Header=40px，ControlBar=36px
+- 垂直/水平分隔条=4px，默认透明，hover→`color-border`，drag→`color-ink`
+- Code Editor 宽度 20%–75%，Canvas 最小 25%，Variable Panel 最小 15%
+- 响应式断点：<768px 上下堆叠，768–1024px Editor 35%，>1024px Editor 40%
 
-```
-数组每个元素一个格子，下标标在下方：
+---
 
-  idx:  0     1     2     3     4     5     6
-     ┌─────┬─────┬─────┬─────┬─────┬─────┬─────┐
-     │  1  │  4  │  7  │  2  │  9  │  3  │  6  │
-     └─────┴─────┴─────┴─────┴─────┴─────┴─────┘
-                                     ↑
-                                   pivot
+### 4.5 组件样式
 
-- 排序算法中：比较的元素闪动，交换动画
-- 二分搜索：lo/hi/mid 指针标注
-- 滑动窗口：窗口区域高亮背景色
-```
+**Header（40px）**：`color-page` 背景 + hairline 底边。标题 `font-mono 14px weight-500 tracked 0.04em`。状态指示器 8px 圆点（按语义色）+ 12px `font-ui` 标签。
 
-#### B树渲染
+**TemplatePicker**：`color-surface` 卡片 + `shadow-popover`。搜索 `font-mono 13px`。分类标题 `font-ui 10px weight-600 color-text-tertiary`。模板按钮 `font-ui 12px weight-500`，选中态 `ink-light` 背景。
 
-```
-B树节点渲染为水平矩形块，每个 key 为单独小格，children 箭头从 key 间隙向下引出：
+**ControlBar（36px）**：`color-surface` 背景 + hairline 顶边。次要按钮透明/无色，hover→`surface-alt`。主要 Step 按钮 `ink` 背景+白字。步骤历史弹窗 `font-mono 11px`，当前步左边 2px `ink` 指示条。
 
-  ┌───────┐
-  │ 5 | 12 │                  ← 内部节点（多个 key，之间有分隔）
-  └──┬─┼─┬─┘
-    ┌┘  │  └┐
-  ┌─▼─┐┌▼──┐┌──▼─┐
-  │3|6││8|9││15|20│           ← 叶子节点（无向下箭头）
-  └───┘└───┘└────┘
+**VariablePanel**：分区标题 `font-mono 11px weight-500 color-text-secondary tracked`。局部变量表格：变量名 `font-mono 12px color-copper`，类型 `color-text-secondary`，值 `color-text`，指针值 `color-teal`。程序输出区 `surface-alt` 背景。
 
-- 节点背景为棕色系 (#efebe9/#6d4c41)
-- 每个 key 为独立小矩形 (32×28)，圆角 3
-- key 之间有 2px 间距
-- 子节点边缘箭头从父节点 key 间隙下方引出
-- 叶子节点无向下箭头
-```
+**分隔条**：默认与背景同色，hover→`color-border`，drag→`color-ink`。
 
-#### B+树渲染
+---
 
-```
-B+树内部节点仅显示 keys（路由），叶子节点显示 keys 且带水平 sibling 链接：
+### 4.6 Monaco 编辑器主题
 
-  ┌───────┐
-  │   8   │                    ← 内部节点（仅路由 keys）
-  └──┬───┬┘
-  ┌──▼─┐┌─▼──┐
-  │3|5 ││8|12│────→            ← 叶子节点（水平 sibling 虚线箭头）
-  └────┘└────┘
+自定义浅色主题 `cppviz-light`：
 
-- 节点背景为浅绿色系 (#f1f8e9/#558b2f)
-- 内部节点与 B树相同渲染方式
-- 叶子节点间有水平虚线箭头（sibling link）
-- 叶子节点 key 格为浅绿色
-```
+- **Token 颜色**：comment=`#9c9b95` | keyword=`#1e4d7b` bold | string=`#2d8a7b` | number=`#b8703d` | type=`#1e4d7b`
+- **编辑器色彩**：背景 `#ffffff`，行高亮 `#fafaf7`，选区 `#eaf1f7`，光标 `#1e4d7b`，行号 `#c5c2ba`，gutter `#fafaf7`
+- **装饰**：执行行=ink-light 整行高亮，错误行=red-light 背景+3px red 左边，断点=red 实心圆点
+- **设置**：fontSize=13，lineHeight=22，fontFamily=JetBrains Mono，minimap=false
 
-### 4.4 用户标注系统（v0.8+ 降级为兜底，v0.9 交互重构）
+---
 
-v0.8 起，`auto_discover` 自动处理 90% 场景。手动标注仅在字段命名不常规或 auto_discover 判断出错时使用。
+### 4.7 Canvas 可视化系统
 
-**两种添加 @viz 标注的方式（v0.9）：**
+#### 4.7.0 全局规范（所有渲染器遵循）
 
-#### 方式一：右键行号区域（主要方式）
+**背景**：`color-page` 底色 + 24px 间距点阵网格（2px 直径圆，`color-grid`），缩放 <0.5x 时淡出。
 
-```
-在代码编辑器行号/glyph margin 区域右键点击：
-  → 弹出浮动类型选择器（3 列网格，16 种数据结构类型）
-  → 选择一个类型 → 自动检测该行变量名 → 生成 @viz 标注 → 插入到该行上方
+**节点**：
+- 矩形（链表/数组/栈/队列/哈希桶/B树）：默认 `fill=#ffffff stroke=#e4e1da 1.5px`，有指针时 `stroke=#1e4d7b`。cornerRadius=4px，无阴影。
+- 圆形（树/图/堆）：默认 `fill=#ffffff stroke=#e4e1da 1.5px`，有指针时 `stroke=#1e4d7b`。半径 20–22px，无阴影。
 
-备选快捷方式：
-  Ctrl + 点击行号左侧    Windows / Linux
-  ⌘ Cmd + 点击行号左侧   Mac
-  Alt + 点击行号左侧     通用备选
+**边**：所有边 `stroke=#2d8a7b 1.5px`（B树保留棕色 `#8d6e63`，B+树保留绿色 `#689f38`）。
 
-左键点击 glyph margin → 切换断点（与 @viz 不冲突）
-```
+**指针标签**：1px dashed copper 连接线 + 白底 copper 边框标签 + copper 文字。`fontFamily=JetBrains Mono fontSize=10 weight=500`。
 
-#### 方式二：标注管理面板
+**文字**：所有 Canvas Text → `fontFamily='JetBrains Mono'`。节点值 fontSize=12 fill=text。索引 fontSize=10 fill=text-secondary。
 
-```
-右侧面板 🏷️ 标注管理：
-  - 列出当前代码中所有 @viz 标注（图标 + 类型 + 摘要 + 行号 + 删除按钮）
-  - 点击「+ 在第 N 行上方添加标注」按钮
-    → 使用代码编辑器中光标当前所在行作为插入位置
-    → 弹出类型选择器网格
-    → 选择类型 → 自动检测变量 → 生成标注 → 插入
-  - 无需填写表单字段（变量名、字段名等自动检测）
-```
+**空状态**：60×40 虚线矩形（`fill=surface-alt stroke=border dash=[4,3]`）+ "EMPTY" 文字（fontSize=11 JetBrains Mono text-tertiary）。
 
-**交互模型总结：**
+#### 4.7.1 链表
 
-| 操作 | 区域 | 行为 |
-|------|------|------|
-| 左键点击 | glyph margin | 切换断点 |
-| 右键点击 | 行号 / glyph 区域 | 弹出 @viz 类型选择器 |
-| Ctrl/Cmd/Alt + 左键 | 行号 / glyph 区域 | 弹出 @viz 类型选择器（备选） |
-| 点击弹出层外部 | — | 关闭弹出层 |
+水平排列，矩形节点 W=88 H=44，间距 70px。正向箭头居中（cy），teal 1.5px。双向链表反向箭头 cy + 8px。NULL 标记 `∅`。指针标签在节点下方。
 
+#### 4.7.2 二叉树
 
-### 4.5 动画设计
+圆形节点 r=20，层级展开，层高 72px。边为直线 teal 1.5px。NULL 子节点用空心小圆（r=4）。当前访问节点 fill=ink-light，搜索路径节点 fill=teal-light。
 
-```
-指针移动动画：
-  slow 从节点 A 移动到节点 B：
-  1. 节点 A 的 "slow" 标签淡出（~200ms）
-  2. "slow" 标签沿连线平移到节点 B（~300ms，ease-in-out）
-  3. 节点 B 的边框高亮脉冲一次
-  4. "slow" 标签在节点 B 上方淡入
+#### 4.7.3 数组
 
-节点新增动画（链表插入）：
-  1. 旧连线断开 → 消失动画
-  2. 新节点从上方滑入
-  3. 两条新连线从新节点向两侧伸展
-  4. 整体微调布局（节点间距重新均匀分布）
+矩形单元格 W=72 H=40，间距 4px。索引标注在下方。指针标签在上方。排序比较动画→ink-light，交换动画→copper-light。
 
-值修改动画：
-  1. 旧值缩小 + 变灰（~150ms）
-  2. 新值放大 + 高亮（~250ms）
-  3. 恢复正常大小和颜色（~150ms）
-```
+#### 4.7.4 栈
 
-### 4.6 前端状态机
+垂直堆叠，自下而上增长。矩形 W=88 H=36 cornerRadius=3。top 指示器用 copper 虚线+标签在栈顶上方。链式栈与链表节点相同。
+
+#### 4.7.5 队列
+
+循环队列：水平排列 W=72 H=40，front 标签 ink 色在上方，rear 标签 copper 色在上方。链式队列与链表节点相同。
+
+#### 4.7.6 堆
+
+圆形节点 r=20，完全二叉树布局（2i+1/2i+2）。teal 边。数组索引在节点下方。
+
+#### 4.7.7 图
+
+圆形顶点 r=22，圆形布局。teal 有向边。BFS 染色→teal-light/ink-light，DFS 染色→ink-light。
+
+#### 4.7.8 哈希表
+
+桶 W=88 H=40 stroke=#7986cb（靛蓝）。链节点与链表节点相同。拉链法：桶+水平链。开放定址：仅桶数组，空桶 "—"，已删 "✕" red。
+
+#### 4.7.9 B 树 / B+ 树
+
+B 树：横排 key 格（32×28），棕色边框 `#8d6e63`。B+ 树：绿色边框 `#689f38`，叶子节点间水平虚线箭头。
+
+#### 4.7.10 递归树
+
+W=120 H=40。活跃节点 fill=ink-light stroke=ink。已返回节点 fill=surface-alt stroke=border opacity=0.4。teal 边。
+
+---
+
+### 4.8 动画设计
+
+**原则**：意义驱动、时长统一（微交互 150–250ms，结构变化 250–400ms）、进入 EaseOut 退出 EaseIn、尊重 reduced-motion。
+
+| 差分类型 | 动画 | 时长 |
+|---|---|---|
+| `node_created` | scale 0→1 + opacity 0→1 | 300ms EaseOut |
+| `node_removed` | scale 1→0 + opacity 1→0 | 250ms EaseIn |
+| `value_changed` | 旧值缩小灰化 → 新值 teal 放大恢复 | 300ms |
+| `pointer_relocated` | 标签沿 edge 平移 | 250ms EaseInOut |
+| `edge_rewired` | 旧连线淡出 + 新连线伸展 | 250ms |
+| `element_compared` | fill→ink-light→恢复 | 250ms×2 |
+| `element_swapped` | fill→copper-light + 值更新 | 400ms |
+| `node_pushed` | 从偏移方向滑入 | 300ms EaseOut |
+| `node_popped` | 缩小+fade | 250ms EaseIn |
+| `node_path_swapped` | 路径节点依次闪烁，stagger 150ms | 150ms×N |
+
+**缩放/平移**：Ctrl+滚轮缩放（0.25×–3×，光标原点），左键拖拽平移。
+
+---
+
+### 4.9 前端状态机
 
 ```
                     ┌──────────┐
@@ -620,6 +626,45 @@ v0.8 起，`auto_discover` 自动处理 90% 场景。手动标注仅在字段命
          └───────────────────────────────┘
                  回到 PAUSED
 ```
+
+---
+
+### 4.10 Canvas 颜色常量速查表
+
+用于代码实现时的快速参考（对应 `CanvasArea/constants.ts`）：
+
+| 常量 | Hex | 说明 |
+|---|---|---|
+| `NODE_FILL` | `#ffffff` | 节点默认填充 |
+| `NODE_STROKE` | `#e4e1da` | 节点默认描边 |
+| `NODE_STROKE_WIDTH` | `1.5` | 节点描边宽度 |
+| `NODE_POINTED_STROKE` | `#1e4d7b` | 有指针指向时描边 |
+| `NODE_ACTIVE_FILL` | `#eaf1f7` | 当前操作节点填充 |
+| `EDGE_STROKE` | `#2d8a7b` | 所有边颜色 |
+| `EDGE_WIDTH` | `1.5` | 边宽度 |
+| `POINTER_LINE_COLOR` | `#b8703d` | 指针标签连接线 |
+| `POINTER_TAG_FILL` | `#ffffff` | 指针标签背景 |
+| `POINTER_TAG_STROKE` | `#b8703d` | 指针标签边框 |
+| `POINTER_TEXT_COLOR` | `#b8703d` | 指针标签文字 |
+| `CANVAS_FONT` | `JetBrains Mono` | Canvas 字体 |
+| `EMPTY_FILL` | `#f5f4f0` | 空状态矩形填充 |
+| `EMPTY_STROKE` | `#e4e1da` | 空状态矩形描边 |
+| `DOT_GRID_COLOR` | `#ece9e2` | 点阵网格颜色 |
+| `HMAP_BUCKET_STROKE` | `#7986cb` | 哈希桶特有描边 |
+| `BTREE_STROKE` | `#8d6e63` | B 树特有描边 |
+| `BPLUSTREE_STROKE` | `#689f38` | B+ 树特有描边 |
+
+---
+
+### 4.11 UX 检查清单
+
+- 正文对比度 `#1c1c1c` on `#fafaf7` = 17:1（WCAG AAA）
+- Ink Blue `#1e4d7b` on white = 8.5:1（WCAG AAA）
+- Copper `#b8703d` on white = 4.6:1（WCAG AA，仅用于 10px+ 文字/图标/边框）
+- 所有可交互元素有 focus ring（2px ink，2px offset）
+- `prefers-reduced-motion: reduce` → 所有动画 duration=0
+- `font-display: swap` 防止 FOIT
+- 颜色不是唯一信息载体（状态同时有色点+文字标签）
 
 ---
 
