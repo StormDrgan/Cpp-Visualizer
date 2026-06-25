@@ -183,6 +183,8 @@ async def step(session_id: str, body: dict | None = None):
 
     mode = (body or {}).get("mode", "step_over")
 
+    prev_call_stack = session.history[-1].get("call_stack", []) if session.history else None
+
     try:
         if mode == "step_into":
             debugger_state = debugger.step_into()
@@ -199,6 +201,8 @@ async def step(session_id: str, body: dict | None = None):
             session.step_number, debugger_state, session.source_file,
             annotations=annotations,
             walker=walker,
+            selected_vars=session.selected_vars,
+            prev_call_stack=prev_call_stack,
         )
 
         # Compute diff
@@ -313,6 +317,8 @@ async def run_to(session_id: str, body: dict | None = None):
             "payload": {"message": "Program has already terminated."},
         }
 
+    prev_call_stack = session.history[-1].get("call_stack", []) if session.history else None
+
     try:
         debugger_state = debugger.run_to_breakpoint()
         session.step_number += 1
@@ -322,6 +328,8 @@ async def run_to(session_id: str, body: dict | None = None):
         snapshot = build_snapshot(
             session.step_number, debugger_state, session.source_file,
             annotations=annotations, walker=walker,
+            selected_vars=session.selected_vars,
+            prev_call_stack=prev_call_stack,
         )
 
         curr_structures = snapshot.get("heap_structures", [])
@@ -392,6 +400,7 @@ async def reset(session_id: str):
         snapshot = build_snapshot(
             1, state, session.source_file,
             annotations=annotations, walker=walker,
+            selected_vars=session.selected_vars,
         )
         store_prev_structures(session_id, snapshot.get("heap_structures", []))
         session.history.append(snapshot)

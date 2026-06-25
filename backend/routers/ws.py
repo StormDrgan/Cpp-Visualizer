@@ -214,6 +214,9 @@ async def _handle_step(session_id: str, ws: WebSocket, payload: dict) -> None:
 
     mode = payload.get("mode", "step_over")
 
+    # Save previous call stack for recursion tree diff
+    prev_call_stack = session.history[-1].get("call_stack", []) if session.history else None
+
     try:
         if mode == "step_into":
             debugger_state = debugger.step_into()
@@ -230,6 +233,7 @@ async def _handle_step(session_id: str, ws: WebSocket, payload: dict) -> None:
             session.step_number, debugger_state, session.source_file,
             annotations=annotations, walker=walker,
             selected_vars=session.selected_vars,
+            prev_call_stack=prev_call_stack,
         )
 
         curr_structures = snapshot.get("heap_structures", [])
@@ -338,6 +342,8 @@ async def _handle_run_to(session_id: str, ws: WebSocket, payload: dict) -> None:
         })
         return
 
+    prev_call_stack = session.history[-1].get("call_stack", []) if session.history else None
+
     try:
         debugger_state = debugger.run_to_breakpoint()
         session.step_number += 1
@@ -348,6 +354,7 @@ async def _handle_run_to(session_id: str, ws: WebSocket, payload: dict) -> None:
             session.step_number, debugger_state, session.source_file,
             annotations=annotations, walker=walker,
             selected_vars=session.selected_vars,
+            prev_call_stack=prev_call_stack,
         )
 
         curr_structures = snapshot.get("heap_structures", [])

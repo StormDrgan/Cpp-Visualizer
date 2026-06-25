@@ -16,6 +16,7 @@ def build_snapshot(
     annotations: list[Annotation] | None = None,
     walker: MemoryWalker | None = None,
     selected_vars: list[str] | None = None,  # §v0.8: user-selected variable names
+    prev_call_stack: list | None = None,  # previous step's call_stack for recursion tree diff
 ) -> dict:
     """Convert a DebuggerState into the frontend StateSnapshot JSON.
 
@@ -53,7 +54,8 @@ def build_snapshot(
     # Heap structures — walk data structures if annotations and walker are provided
     heap_structures = _build_heap_structures(annotations, walker, debugger_state,
                                               step_number=step_number,
-                                              selected_vars=selected_vars)
+                                              selected_vars=selected_vars,
+                                              prev_call_stack=prev_call_stack)
 
     # Candidates: auto-discovered variable names + inferred types,
     # so the front-end can render a checkbox list (§v0.8 click-to-select).
@@ -89,6 +91,7 @@ def _build_heap_structures(
     *,
     step_number: int = 0,
     selected_vars: list[str] | None = None,  # §v0.8: user-selected var names
+    prev_call_stack: list | None = None,  # previous step's call_stack for recursion tree
 ) -> list[dict]:
     """Build heap_structures from annotations using the MemoryWalker.
 
@@ -266,11 +269,10 @@ def _build_heap_structures(
         elif ann.struct_type == "recursion_tree":
             # v0.9: recursion tree from call stack
             if debugger_state:
-                prev_stack = getattr(debugger_state, 'prev_call_stack', None)
                 result = walker.walk_recursion(
                     annotation_name=ann.name,
                     call_stack=debugger_state.call_stack,
-                    prev_call_stack=prev_stack,
+                    prev_call_stack=prev_call_stack,
                 )
                 sdict = _traversal_to_dict(result)
                 sdict["structure_type"] = "recursion_tree"

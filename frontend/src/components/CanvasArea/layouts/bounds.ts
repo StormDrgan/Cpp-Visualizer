@@ -51,6 +51,13 @@ export function getStructBounds(struct: HeapStructure, canvasSize: { w: number; 
       maxY: 20 + 200 + 100,
     };
   }
+  if (type === 'recursion_tree') {
+    const n = struct.nodes.length;
+    if (n === 0) return emptyBounds;
+    // Vertical chain: NODE_W (130) wide, depth * DEPTH_GAP (64) tall
+    const contentH = (struct.nodes.length) * 64 + 40;
+    return { minX: canvasSize.w / 2 - 80, maxX: canvasSize.w / 2 + 80, minY: 10, maxY: 20 + contentH + 40 };
+  }
   if (type === 'b_tree' || type === 'bplustree') {
     const layout = getBTreeLayout(struct, canvasSize);
     if (!layout) return emptyBounds;

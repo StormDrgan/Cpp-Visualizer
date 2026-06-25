@@ -26,6 +26,7 @@ _walkers: dict[str, "MemoryWalker"] = {}
 _pending_breakpoints: dict[str, set[int]] = {}
 _session_annotations: dict[str, list["Annotation"]] = {}
 _prev_heap_structures: dict[str, list[dict]] = {}
+_prev_call_stacks: dict[str, list[dict]] = {}
 _ws_connections: dict[str, "WebSocket"] = {}
 
 
@@ -114,6 +115,20 @@ def pop_prev_structures(session_id: str) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Previous call stack (for recursion tree diff detection)
+# ---------------------------------------------------------------------------
+
+def get_prev_call_stack(session_id: str) -> list[dict] | None:
+    return _prev_call_stacks.get(session_id)
+
+def store_prev_call_stack(session_id: str, stack: list[dict]) -> None:
+    _prev_call_stacks[session_id] = stack
+
+def pop_prev_call_stack(session_id: str) -> list[dict] | None:
+    return _prev_call_stacks.pop(session_id, None)
+
+
+# ---------------------------------------------------------------------------
 # WebSocket connections
 # ---------------------------------------------------------------------------
 
@@ -144,4 +159,5 @@ def cleanup_session(session_id: str) -> None:
     pop_breakpoints(session_id)
     pop_annotations(session_id)
     pop_prev_structures(session_id)
+    pop_prev_call_stack(session_id)
     unregister_ws(session_id)

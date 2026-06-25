@@ -751,9 +751,21 @@ class MemoryWalker:
 
         # Mark returned frames (in prev but not in current)
         curr_ids = {n.addr for n in nodes}
-        for n in nodes:
-            if n.addr not in curr_ids:
-                n.fields["status"] = "returned"
+        returned_ids = prev_ids - curr_ids
+        for fid in returned_ids:
+            parts = fid.rsplit(":", 1)
+            func = parts[0] if len(parts) > 1 else "unknown"
+            line_str = parts[1] if len(parts) > 1 else "0"
+            nodes.append(HeapNode(
+                addr=fid,
+                label=func,
+                fields={
+                    "function": func,
+                    "line": line_str,
+                    "depth": "-1",
+                    "status": "returned",
+                },
+            ))
 
         return TraversalResult(
             annotation_name=annotation_name,

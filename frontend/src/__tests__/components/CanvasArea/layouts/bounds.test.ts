@@ -77,6 +77,13 @@ describe('getStructBounds', () => {
     expect(result.maxX).toBeGreaterThan(result.minX);
   });
 
+  it('computes inline bounds for recursion_tree type', () => {
+    const nodes = Array.from({ length: 3 }, (_, i) => makeNode(`fib:${i}`, `fib(${i})`, { depth: String(i), status: 'active' }));
+    const result = getStructBounds(makeStruct('recursion_tree', nodes), CANVAS);
+    expect(result.maxX).toBeGreaterThan(result.minX);
+    expect(result.maxY).toBeGreaterThan(result.minY);
+  });
+
   it('dispatches to getBTreeLayout for b_tree type', () => {
     const s = makeStruct('b_tree', [makeNode('0x1', 'BTreeNode')]);
     const result = getStructBounds(s, CANVAS);
